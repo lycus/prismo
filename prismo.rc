@@ -1,0 +1,19 @@
+#[link(name = "prismo",
+       vers = "0.0",
+       uuid = "",
+       url = "https://github.com/rfw/prismo")];
+
+#[comment = "The Prismo programming language."];
+#[license = "MIT"];
+
+extern mod core;
+extern mod std;
+
+pub mod ast;
+pub mod lexer;
+pub mod patterns;
+pub mod types;
+
+fn main() {
+    io::println(lexer::lex(io::stdin()).to_str());
+}
