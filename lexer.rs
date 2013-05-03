@@ -2,11 +2,15 @@ use core::io;
 use core::char;
 use core::unicode;
 
+#[deriving(Eq)]
 pub enum TokenType {
+    EOF,
     KEYWORD,
     UNDERSCORE,
+    ELLIPSIS,
     SEMICOLON,
     COMMA,
+    DOT,
     LPAREN,
     RPAREN,
     LBRACE,
@@ -25,9 +29,13 @@ pub enum TokenType {
 impl to_str::ToStr for TokenType {
     fn to_str(&self) -> ~str {
         match self {
+            &EOF                => ~"EOF",
+            &KEYWORD            => ~"KEYWORD",
             &UNDERSCORE         => ~"UNDERSCORE",
+            &ELLIPSIS           => ~"ELLIPSIS",
             &SEMICOLON          => ~"SEMICOLON",
             &COMMA              => ~"COMMA",
+            &DOT                => ~"DOT",
             &LPAREN             => ~"LPAREN",
             &RPAREN             => ~"RPAREN",
             &LBRACE             => ~"LBRACE",
@@ -37,7 +45,6 @@ impl to_str::ToStr for TokenType {
             &OPERATOR           => ~"OPERATOR",
             &RECORD_NAME        => ~"RECORD_NAME",
             &SYMBOL             => ~"SYMBOL",
-            &KEYWORD            => ~"KEYWORD",
             &STRING_LITERAL     => ~"STRING_LITERAL",
             &BYTES_LITERAL      => ~"BYTES_LITERAL",
             &INTEGER_LITERAL    => ~"INTEGER_LITERAL",
@@ -160,8 +167,16 @@ fn lex_comment(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
 fn lex_special_character(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
     let mut n: uint;
 
+    n = 3;
+    if s.len() >= n && ["..."].contains(&s.substr(0, n)) {
+        return (option::Some((match s.substr(0, n) {
+            "..." => ELLIPSIS,
+            _   => fail!(~"lexer failure: pattern match failed in lex_special_character (somehow!)")
+        }, s.substr(0, n).to_managed())), n);
+    }
+
     n = 1;
-    if s.len() >= n && ["{", "}", "(", ")", "[", "]", ";", ","].contains(&s.substr(0, n)) {
+    if s.len() >= n && ["{", "}", "(", ")", "[", "]", ";", ",", "."].contains(&s.substr(0, n)) {
         return (option::Some((match s.char_at(0) {
             '{' => LBRACE,
             '}' => RBRACE,
@@ -171,6 +186,7 @@ fn lex_special_character(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
             ']' => RBRACK,
             ';' => SEMICOLON,
             ',' => COMMA,
+            '.' => DOT,
             _   => fail!(~"lexer failure: pattern match failed in lex_special_character (somehow!)")
         }, s.substr(0, n).to_managed())), n);
     }
@@ -260,16 +276,17 @@ pub fn lex<R: io::Reader + io::ReaderUtil>(r: R) -> @[Token] {
             ].each |&rule| {
                 match rule(s) {
                     (option::Some((type_, value)), eaten) => {
-                        colno += eaten;
-                        s = line.slice(colno, line.len());
-                        found = eaten != 0;
-
                         tokens += @[Token {
                             type_: type_,
                             value: value,
                             lineno: lineno,
                             colno: colno
                         }];
+
+                        colno += eaten;
+                        s = line.slice(colno, line.len());
+                        found = eaten != 0;
+
                         break;
                     }
 
@@ -290,6 +307,13 @@ pub fn lex<R: io::Reader + io::ReaderUtil>(r: R) -> @[Token] {
             }
         }
     }
+
+    tokens += [Token {
+        type_: EOF,
+        value: @"",
+        lineno: lineno,
+        colno: 0
+    }];
 
     tokens
 }

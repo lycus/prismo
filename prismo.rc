@@ -6,14 +6,51 @@
 #[comment = "The Prismo programming language."];
 #[license = "MIT"];
 
+
 extern mod core;
 extern mod std;
 
+use std::getopts;
+
 pub mod ast;
 pub mod lexer;
+pub mod parser;
 pub mod patterns;
 pub mod types;
 
+fn print_help() {
+    let args = os::args();
+    let program = copy args[0];
+
+    io::println(fmt!("Usage: %s [options]", program));
+    io::println("");
+    io::println("   -t, --tokens   Dump token stream.");
+    io::println("   -h, --help     Print this message.");
+}
+
 fn main() {
-    io::println(lexer::lex(io::stdin()).to_str());
+    let args = os::args();
+
+    let opts = ~[
+        getopts::optflag("h"), getopts::optflag("help"),
+        getopts::optflag("t"), getopts::optflag("tokens")
+    ];
+
+    let matches = match getopts::getopts(vec::tail(args), opts) {
+        result::Ok(m) => m,
+        result::Err(f) => fail!(getopts::fail_str(f))
+    };
+
+    if getopts::opt_present(&matches, "h") || getopts::opt_present(&matches, "help") {
+        print_help();
+        return;
+    }
+
+    let tokens = lexer::lex(io::stdin());
+
+    if getopts::opt_present(&matches, "t") || getopts::opt_present(&matches, "tokens") {
+        io::println(tokens.to_str());
+    }
+
+    let program = parser::parse(tokens);
 }

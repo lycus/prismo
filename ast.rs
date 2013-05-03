@@ -55,3 +55,18 @@ pub enum BareExp {
     // a
     SymbolExpression(@types::Sym)
 }
+
+#[deriving(Eq)]
+pub struct Module(@[types::Sym]);
+
+pub struct ImportDeclaration {
+    module: @Module,
+    qualified: bool,
+    lineno: uint
+}
+
+pub struct Program {
+    imports: @[ImportDeclaration],
+    records: @[types::Rec],
+    body: @[Exp]
+}
