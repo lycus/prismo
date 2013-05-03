@@ -1,6 +1,5 @@
 use ast;
 use lexer;
-use types;
 
 struct ParserState {
     tokens: @[lexer::Token],
@@ -44,11 +43,11 @@ impl ParserState {
     }
 }
 
-fn parse_symbol(state: @mut ParserState) -> types::Sym {
-    types::Sym(state.expect(lexer::SYMBOL).value)
+fn parse_symbol(state: @mut ParserState) -> ast::Sym {
+    ast::Sym(state.expect(lexer::SYMBOL).value)
 }
 
-fn parse_module_name(state: @mut ParserState) -> ast::Module {
+fn parse_module_name(state: @mut ParserState) -> ast::ModuleName {
     let mut names = @[parse_symbol(state)];
 
     loop {
@@ -63,9 +62,7 @@ fn parse_module_name(state: @mut ParserState) -> ast::Module {
         names += [child];
     }
 
-    state.expect(lexer::SEMICOLON);
-
-    ast::Module(names)
+    ast::ModuleName(names)
 }
 
 fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
@@ -80,19 +77,80 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
     }
 
     ast::ImportDeclaration {
-        module: @parse_module_name(state),
+        module: parse_module_name(state),
         qualified: qualified,
+        lineno: first.lineno
+    }
+}
+
+fn parse_record_name(state: @mut ParserState) -> ast::RecordName {
+    ast::RecordName(state.expect(lexer::RECORD_NAME).value)
+}
+
+fn parse_record_body(state: @mut ParserState) -> @[ast::Sym] {
+    let mut slots: @[ast::Sym] = @[];
+
+    slots += [parse_symbol(state)];
+
+    loop {
+        let mut token = state.peek();
+        if token.type_ != lexer::COMMA {
+            break;
+        }
+        state.pop();
+
+        token = state.peek();
+        if token.type_ == lexer::SYMBOL {
+            slots += [parse_symbol(state)];
+        } else {
+            break;
+        }
+    }
+
+    slots
+}
+
+fn parse_record_declaration(state: @mut ParserState) -> ast::RecordDeclaration {
+    let first = state.expect_with_value(lexer::KEYWORD, @"record");
+    let record_name = parse_record_name(state);
+    let mut slots: @[ast::Sym] = @[];
+
+    let token = state.peek();
+
+    if token.type_ == lexer::LPAREN {
+        state.pop();
+        if state.peek().type_ != lexer::RPAREN {
+            slots = parse_record_body(state);
+        }
+        state.expect(lexer::RPAREN);
+    }
+
+    ast::RecordDeclaration {
+        name: record_name,
+        slots: slots,
         lineno: first.lineno
     }
 }
 
 fn parse_program(state: @mut ParserState) -> ast::Program {
     let mut imports = @[];
+    let mut records = @[];
 
     loop {
         let token = state.peek();
         if (token.type_ == lexer::KEYWORD && token.value == @"import") {
             imports += [parse_import_declaration(state)];
+            state.expect(lexer::SEMICOLON);
+        } else {
+            break;
+        }
+    }
+
+    loop {
+        let token = state.peek();
+        if (token.type_ == lexer::KEYWORD && token.value == @"record") {
+            records += [parse_record_declaration(state)];
+            state.expect(lexer::SEMICOLON);
         } else {
             break;
         }
@@ -102,7 +160,7 @@ fn parse_program(state: @mut ParserState) -> ast::Program {
 
     ast::Program {
         imports: imports,
-        records: @[],
+        records: records,
         body: @[]
     }
 }

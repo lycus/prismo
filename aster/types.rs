@@ -1,30 +1,15 @@
 use core::libc::c_void;
 
 use ast;
-use patterns;
-
-#[deriving(Eq)]
-pub struct Sym(@str);
-
-pub struct Rec {
-    name: @str,
-    fields: @[@Sym]
-}
-
-#[deriving(Eq)]
-pub enum Lit {
-    IntegerLiteral(int),
-    StringLiteral(@str)
-}
 
 pub struct Fun {
-    pattern: @[@patterns::Pat],
+    pattern: @[@ast::Pat],
     body: ast::Exp
 }
 
 pub enum Val {
     // a
-    Symbol(@Sym),
+    Symbol(@ast::Sym),
 
     // 1
     Integer(int),
@@ -39,7 +24,7 @@ pub enum Val {
     String(~str),
 
     // A(a, b, c, ...)
-    Record(@Rec, @[@Val]),
+    Record(@ast::RecordDeclaration, @[@Val]),
 
     // f(a, b, ...) = ...
     Function(@[@Fun]),

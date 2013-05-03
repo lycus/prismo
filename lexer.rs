@@ -26,45 +26,11 @@ pub enum TokenType {
     FLOATING_LITERAL // TODO
 }
 
-impl to_str::ToStr for TokenType {
-    fn to_str(&self) -> ~str {
-        match self {
-            &EOF                => ~"EOF",
-            &KEYWORD            => ~"KEYWORD",
-            &UNDERSCORE         => ~"UNDERSCORE",
-            &ELLIPSIS           => ~"ELLIPSIS",
-            &SEMICOLON          => ~"SEMICOLON",
-            &COMMA              => ~"COMMA",
-            &DOT                => ~"DOT",
-            &LPAREN             => ~"LPAREN",
-            &RPAREN             => ~"RPAREN",
-            &LBRACE             => ~"LBRACE",
-            &RBRACE             => ~"RBRACE",
-            &LBRACK             => ~"LBRACK",
-            &RBRACK             => ~"RBRACK",
-            &OPERATOR           => ~"OPERATOR",
-            &RECORD_NAME        => ~"RECORD_NAME",
-            &SYMBOL             => ~"SYMBOL",
-            &STRING_LITERAL     => ~"STRING_LITERAL",
-            &BYTES_LITERAL      => ~"BYTES_LITERAL",
-            &INTEGER_LITERAL    => ~"INTEGER_LITERAL",
-            &FLOATING_LITERAL   => ~"FLOATING_LITERAL",
-        }
-    }
-}
-
 pub struct Token {
     type_: TokenType,
     value: @str,
     lineno: uint,
     colno: uint
-}
-
-impl to_str::ToStr for Token {
-    fn to_str(&self) -> ~str {
-        fmt!("Token { type_ = %s, value = %?, lineno = %?, colno = %? }",
-              self.type_.to_str(), self.value, self.lineno, self.colno)
-    }
 }
 
 fn lex_integer_literal(s: &str) -> (option::Option<(TokenType, @str)>, uint) {

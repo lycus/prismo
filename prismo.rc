@@ -15,8 +15,10 @@ use std::getopts;
 pub mod ast;
 pub mod lexer;
 pub mod parser;
-pub mod patterns;
-pub mod types;
+
+pub mod aster {
+    pub mod types;
+}
 
 fn print_help() {
     let args = os::args();
@@ -25,6 +27,7 @@ fn print_help() {
     io::println(fmt!("Usage: %s [options]", program));
     io::println("");
     io::println("   -t, --tokens   Dump token stream.");
+    io::println("   -a, --ast      Dump AST.");
     io::println("   -h, --help     Print this message.");
 }
 
@@ -32,8 +35,9 @@ fn main() {
     let args = os::args();
 
     let opts = ~[
-        getopts::optflag("h"), getopts::optflag("help"),
-        getopts::optflag("t"), getopts::optflag("tokens")
+        getopts::optflag("t"), getopts::optflag("tokens"),
+        getopts::optflag("a"), getopts::optflag("ast"),
+        getopts::optflag("h"), getopts::optflag("help")
     ];
 
     let matches = match getopts::getopts(vec::tail(args), opts) {
@@ -49,8 +53,12 @@ fn main() {
     let tokens = lexer::lex(io::stdin());
 
     if getopts::opt_present(&matches, "t") || getopts::opt_present(&matches, "tokens") {
-        io::println(tokens.to_str());
+        io::println(fmt!("%?", tokens));
     }
 
     let program = parser::parse(tokens);
+
+    if getopts::opt_present(&matches, "a") || getopts::opt_present(&matches, "ast") {
+        io::println(fmt!("%?", program));
+    }
 }
