@@ -225,7 +225,7 @@ fn lex_keyword(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
     (option::None, 0)
 }
 
-pub fn is_operator_char(c: char) -> bool {
+fn is_operator_char(c: char) -> bool {
     return unicode::general_category::Sm(c)
         || unicode::general_category::So(c)
         || ['!', '#', '%', '&', '*', '+', '-', '/', ':', '<', '=', '>', '?', '@', '\\', '^', '|',
