@@ -1,1 +1,0 @@
-record List(x, xs,);

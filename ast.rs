@@ -24,19 +24,19 @@ pub enum Pat {
     AnyPattern,
 
     // A(a, b, c, ...)
-    RecordPattern(@RecordName, @[@Pat]),
+    RecordPattern(RecordName, @[Pat]),
 
-    // (a, b, c, ...)
-    TuplePattern(@[@Pat]),
+    // [a, b, c, ...]
+    ListPattern(@[Pat]),
 
     // a as a'
-    BindingPattern(@Sym, @Pat),
+    BindingPattern(Sym, @Pat),
 
     // some kind of literal
-    LiteralPattern(@Lit),
+    LiteralPattern(Lit),
 
     // a
-    SymbolPattern(@Sym)
+    SymbolPattern(Sym)
 }
 
 pub enum BareExp {
@@ -56,37 +56,40 @@ pub enum BareExp {
     LiteralExpression(@Lit),
 
     // match a with case b' -> b case c' -> c
-    MatchExpression(@Exp, @[(@Pat, @Exp)]),
+    MatchExpression(@Exp, @[(Pat, Exp)]),
 
     // { a; b; c }
-    ImplicitBlockExpression(@[@Exp]),
+    ImplicitBlockExpression(@[Exp]),
 
     // { a; b; c; }
-    BlockExpression(@[@Exp]),
+    BlockExpression(@[Exp]),
 
     // a(b, c, d, ...)
-    CallExpression(@Exp, @[@Exp]),
+    CallExpression(@Exp, @[Exp]),
 
-    // (a, b, c, d)
-    TupleExpression(@[@Exp]),
+    // [a, b, c, d]
+    ListExpression(@[Exp]),
 
     // fn (a) -> b
-    LambdaExpression(@Pat, @Exp),
+    LambdaExpression(@[Pat], @Exp),
 
     // a = b
-    DeclaredBindingExpression(@Pat, @Exp),
+    DeclaredBindingExpression(Pat, @Exp),
 
     // a := b
-    NonlocalBindingExpression(@Pat, @Exp),
+    NonlocalBindingExpression(Pat, @Exp),
 
     // a.b
-    RecordAccessExpression(@Exp, @Sym),
+    RecordAccessExpression(@Exp, Sym),
 
     // a:b
-    RecordFunctionBindingExpression(@Exp, @Sym),
+    RecordFunctionBindingExpression(@Exp, Sym),
 
     // a
-    SymbolExpression(@Sym)
+    SymbolExpression(Sym),
+
+    // A
+    RecordNameExpression(RecordName)
 }
 
 pub struct ImportDeclaration {

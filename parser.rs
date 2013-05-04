@@ -43,12 +43,21 @@ impl ParserState {
     }
 }
 
-fn parse_symbol(state: @mut ParserState) -> ast::Sym {
-    ast::Sym(state.expect(lexer::SYMBOL).value)
+fn parse_symbol(state: @mut ParserState) -> ast::Exp {
+    let token = state.expect(lexer::SYMBOL);
+    ast::Exp {
+        exp: ast::SymbolExpression(ast::Sym(token.value)),
+        lineno: token.lineno
+    }
 }
 
 fn parse_module_name(state: @mut ParserState) -> ast::ModuleName {
-    let mut names = @[parse_symbol(state)];
+    let mut parts = @[];
+
+    match parse_symbol(state) {
+        ast::Exp { exp: ast::SymbolExpression(part), lineno: _ } => parts += [part],
+        _ => state.fail(~"irrefutable pattern match refuted?!")
+    }
 
     loop {
         let token = state.peek();
@@ -58,19 +67,21 @@ fn parse_module_name(state: @mut ParserState) -> ast::ModuleName {
         }
         state.pop();
 
-        let child = parse_symbol(state);
-        names += [child];
+        match parse_symbol(state) {
+            ast::Exp { exp: ast::SymbolExpression(part), lineno: _ } => parts += [part],
+            _ => state.fail(~"irrefutable pattern match refuted?!")
+        }
     }
 
-    ast::ModuleName(names)
+    ast::ModuleName(parts)
 }
 
 fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
     let first = state.expect_with_value(lexer::KEYWORD, @"import");
     let token = state.peek();
 
-    let mut qualified: bool = token.type_ == lexer::KEYWORD &&
-                              token.value == @"qualified";
+    let mut qualified = token.type_ == lexer::KEYWORD &&
+                        token.value == @"qualified";
 
     if qualified {
         state.pop();
@@ -83,25 +94,33 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
     }
 }
 
-fn parse_record_name(state: @mut ParserState) -> ast::RecordName {
-    ast::RecordName(state.expect(lexer::RECORD_NAME).value)
+fn parse_record_name(state: @mut ParserState) -> ast::Exp {
+    let token = state.expect(lexer::RECORD_NAME);
+    ast::Exp {
+        exp: ast::RecordNameExpression(ast::RecordName(token.value)),
+        lineno: token.lineno
+    }
 }
 
 fn parse_record_body(state: @mut ParserState) -> @[ast::Sym] {
-    let mut slots: @[ast::Sym] = @[];
+    let mut slots = @[];
 
-    slots += [parse_symbol(state)];
+    match parse_symbol(state) {
+        ast::Exp { exp: ast::SymbolExpression(slot), lineno: _ } => slots += [slot],
+        _ => state.fail(~"irrefutable pattern match refuted?!")
+    }
 
     loop {
-        let mut token = state.peek();
-        if token.type_ != lexer::COMMA {
+        if state.peek().type_ != lexer::COMMA {
             break;
         }
         state.pop();
 
-        token = state.peek();
-        if token.type_ == lexer::SYMBOL {
-            slots += [parse_symbol(state)];
+        if state.peek().type_ == lexer::SYMBOL {
+            match parse_symbol(state) {
+                ast::Exp { exp: ast::SymbolExpression(slot), lineno: _ } => slots += [slot],
+                _ => state.fail(~"irrefutable pattern match refuted?!")
+            }
         } else {
             break;
         }
@@ -112,12 +131,16 @@ fn parse_record_body(state: @mut ParserState) -> @[ast::Sym] {
 
 fn parse_record_declaration(state: @mut ParserState) -> ast::RecordDeclaration {
     let first = state.expect_with_value(lexer::KEYWORD, @"record");
-    let record_name = parse_record_name(state);
-    let mut slots: @[ast::Sym] = @[];
+    let record_name: ast::RecordName;
 
-    let token = state.peek();
+    match parse_record_name(state) {
+        ast::Exp { exp: ast::RecordNameExpression(name), lineno: _ } => record_name = name,
+        _ => state.fail(~"irrefutable pattern match refuted?!")
+    }
 
-    if token.type_ == lexer::LPAREN {
+    let mut slots = @[];
+
+    if state.peek().type_ == lexer::LPAREN {
         state.pop();
         if state.peek().type_ != lexer::RPAREN {
             slots = parse_record_body(state);
@@ -132,9 +155,106 @@ fn parse_record_declaration(state: @mut ParserState) -> ast::RecordDeclaration {
     }
 }
 
+fn parse_lambda(state: @mut ParserState) -> ast::Exp {
+    let first = state.expect_with_value(lexer::KEYWORD, @"fn");
+    state.expect(lexer::LPAREN);
+    // TODO: the rest of this
+    state.expect(lexer::RPAREN);
+    state.expect(lexer::ARROW);
+    ast::Exp {
+        exp: ast::LambdaExpression(@[ast::AnyPattern], @parse_expression(state)),
+        lineno: first.lineno
+    }
+}
+
+fn parse_list_body(state: @mut ParserState) -> @[ast::Exp] {
+    let mut items = @[parse_expression(state)];
+
+    loop {
+        if state.peek().type_ != lexer::COMMA {
+            break;
+        }
+        state.pop();
+
+        if state.peek().type_ == lexer::RBRACK {
+            break;
+        }
+
+        items += [parse_expression(state)];
+    }
+
+    items
+}
+
+fn parse_list(state: @mut ParserState) -> ast::Exp {
+    let first = state.expect(lexer::LBRACK);
+
+    let mut items = @[];
+
+    if state.peek().type_ != lexer::RBRACK {
+        items = parse_list_body(state);
+    }
+
+    state.expect(lexer::RBRACK);
+
+    ast::Exp {
+        exp: ast::ListExpression(items),
+        lineno: first.lineno
+    }
+}
+
+fn parse_primary(state: @mut ParserState) -> ast::Exp {
+    let first = state.peek();
+
+    match first.type_ {
+        lexer::KEYWORD => parse_lambda(state),
+        lexer::LPAREN => parse_parenthesized(state),
+        lexer::LBRACK => parse_list(state),
+        lexer::SYMBOL => parse_symbol(state),
+        _ => state.fail(~"expected one of KEYWORD, LPAREN, LBRACK, SYMBOL")
+    }
+}
+
+fn parse_parenthesized(state: @mut ParserState) -> ast::Exp {
+    state.expect(lexer::LPAREN);
+    let exp = parse_expression(state);
+    state.expect(lexer::RPAREN);
+    exp
+}
+
+fn parse_expression(state: @mut ParserState) -> ast::Exp {
+    // TODO: the rest of this
+    parse_primary(state)
+}
+
+fn parse_statements(state: @mut ParserState) -> (@[ast::Exp], bool) {
+    let mut statements = @[];
+    let mut trailing_semi = false;
+
+    statements += [parse_expression(state)];
+
+    loop {
+        if state.peek().type_ != lexer::SEMICOLON {
+            break;
+        }
+        state.pop();
+
+        if state.peek().type_ == lexer::RBRACE ||
+           state.peek().type_ == lexer::EOF {
+            trailing_semi = true;
+            break;
+        }
+
+        statements += [parse_expression(state)];
+    }
+
+    (statements, trailing_semi)
+}
+
 fn parse_program(state: @mut ParserState) -> ast::Program {
     let mut imports = @[];
     let mut records = @[];
+    let mut body = @[];
 
     loop {
         let token = state.peek();
@@ -156,12 +276,18 @@ fn parse_program(state: @mut ParserState) -> ast::Program {
         }
     }
 
+    if state.peek().type_ != lexer::EOF {
+        match parse_statements(state) {
+            (b, _) => body = b
+        }
+    }
+
     state.expect(lexer::EOF);
 
     ast::Program {
         imports: imports,
         records: records,
-        body: @[]
+        body: body
     }
 }
 

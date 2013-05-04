@@ -11,6 +11,7 @@ pub enum TokenType {
     SEMICOLON,
     COMMA,
     DOT,
+    ARROW,
     LPAREN,
     RPAREN,
     LBRACE,
@@ -137,6 +138,14 @@ fn lex_special_character(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
     if s.len() >= n && ["..."].contains(&s.substr(0, n)) {
         return (option::Some((match s.substr(0, n) {
             "..." => ELLIPSIS,
+            _   => fail!(~"lexer failure: pattern match failed in lex_special_character (somehow!)")
+        }, s.substr(0, n).to_managed())), n);
+    }
+
+    n = 2;
+    if s.len() >= n && ["->"].contains(&s.substr(0, n)) {
+        return (option::Some((match s.substr(0, n) {
+            "->" => ARROW,
             _   => fail!(~"lexer failure: pattern match failed in lex_special_character (somehow!)")
         }, s.substr(0, n).to_managed())), n);
     }

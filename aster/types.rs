@@ -4,7 +4,7 @@ use ast;
 
 pub struct Fun {
     pattern: @[@ast::Pat],
-    body: ast::Exp
+    body: @ast::Exp
 }
 
 pub enum Val {
