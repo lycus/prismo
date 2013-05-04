@@ -22,6 +22,15 @@ impl ParserState {
         token
     }
 
+    fn expect_any(&mut self, types: ~[lexer::TokenType]) -> lexer::Token {
+        let token = self.pop();
+        if !types.contains(&token.type_) {
+            self.fail(fmt!("expected one of %?, got \"%s\" (%?)"
+                           types, token.value, token.type_));
+        }
+        token
+    }
+
     fn expect_with_value(&mut self, type_: lexer::TokenType, value: @str) -> lexer::Token {
         let token = self.expect(type_);
         if token.value != value {
@@ -204,14 +213,18 @@ fn parse_list(state: @mut ParserState) -> ast::Exp {
 }
 
 fn parse_primary(state: @mut ParserState) -> ast::Exp {
-    let first = state.peek();
-
-    match first.type_ {
+    match state.peek().type_ {
         lexer::KEYWORD => parse_lambda(state),
         lexer::LPAREN => parse_parenthesized(state),
         lexer::LBRACK => parse_list(state),
         lexer::SYMBOL => parse_symbol(state),
-        _ => state.fail(~"expected one of KEYWORD, LPAREN, LBRACK, SYMBOL")
+        _ => {
+            state.expect_any(~[lexer::KEYWORD,
+                               lexer::LPAREN,
+                               lexer::LBRACK,
+                               lexer::SYMBOL]);
+            state.fail(~"unreachable code reached?!");
+        }
     }
 }
 
