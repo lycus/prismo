@@ -23,8 +23,8 @@ pub enum TokenType {
     ELLIPSIS,
     SEMICOLON,
     COMMA,
-    //COLON,
-    //DOT,
+    COLON,
+    DOT,
     ARROW,
     LPAREN,
     RPAREN,
@@ -205,8 +205,8 @@ fn lex_operator(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
         "..." => ELLIPSIS,
         "->" => ARROW,
         "=" => ASSIGN,
-        //"." => DOT,
-        //":" => COLON,
+        "." => DOT,
+        ":" => COLON,
         _ => OPERATOR
     }, s.slice(0, n).to_managed())), n)
 }

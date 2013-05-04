@@ -86,7 +86,7 @@ fn parse_module_name(state: @mut ParserState) -> ast::ModuleName {
     loop {
         let token = state.peek();
 
-        if (token.type_ != lexer::OPERATOR || token.value != @".") {
+        if (token.type_ != lexer::DOT) {
             break;
         }
         state.advance();
@@ -541,26 +541,51 @@ fn parse_parameters(state: @mut ParserState) -> @[ast::Exp] {
     params
 }
 
-fn parse_function_call(state: @mut ParserState) -> ast::Exp {
+fn parse_postfix_expression(state: @mut ParserState) -> ast::Exp {
     let mut lhs = parse_primary(state);
 
     loop {
         let token = state.peek();
-        if token.type_ != lexer::LPAREN {
-            break;
+        match token.type_ {
+            lexer::LPAREN => {
+                state.advance();
+
+                lhs = ast::Exp {
+                    exp: ast::CallExpression(@lhs, if state.peek().type_ != lexer::RPAREN {
+                        parse_parameters(state)
+                    } else {
+                        @[]
+                    }),
+                    lineno: token.lineno
+                };
+
+                state.expect(lexer::RPAREN);
+            },
+
+            lexer::COLON => {
+                state.advance();
+
+                let (sym, _) = parse_symbol(state);
+
+                lhs = ast::Exp {
+                    exp: ast::RecordFunctionBindExpression(@lhs, sym),
+                    lineno: token.lineno
+                };
+            },
+
+            lexer::DOT => {
+                state.advance();
+
+                let (sym, _) = parse_symbol(state);
+
+                lhs = ast::Exp {
+                    exp: ast::RecordAccessExpression(@lhs, sym),
+                    lineno: token.lineno
+                };
+            },
+
+            _ => break
         }
-        state.advance();
-
-        lhs = ast::Exp {
-            exp: ast::CallExpression(@lhs, if state.peek().type_ != lexer::RPAREN {
-                parse_parameters(state)
-            } else {
-                @[]
-            }),
-            lineno: token.lineno
-        };
-
-        state.expect(lexer::RPAREN);
     }
 
     lhs
@@ -589,7 +614,7 @@ fn parse_binary_expression(state: @mut ParserState) -> ast::Exp {
                 break;
             }
             state.advance();
-            let mut rhs = @parse_function_call(state);
+            let mut rhs = @parse_postfix_expression(state);
             loop {
                 let next_op = state.peek();
                 if next_op.type_ != lexer::OPERATOR || precedence(next_op.value) <= precedence(op.value) {
@@ -605,7 +630,7 @@ fn parse_binary_expression(state: @mut ParserState) -> ast::Exp {
         lhs
     }
 
-    *_impl(state, @parse_function_call(state), 0)
+    *_impl(state, @parse_postfix_expression(state), 0)
 }
 
 fn parse_expression(state: @mut ParserState) -> ast::Exp {
