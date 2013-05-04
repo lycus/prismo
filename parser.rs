@@ -189,15 +189,15 @@ fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
 fn parse_function_pattern(state: @mut ParserState) -> ast::Pat {
     let (sym, _) = parse_symbol(state);
 
-    let mut patterns = @[];
+    state.expect(lexer::LPAREN);
 
-    if state.peek().type_ == lexer::LPAREN {
-        state.advance();
-        if state.peek().type_ != lexer::RPAREN {
-            patterns = parse_patterns(state);
-        }
-        state.expect(lexer::RPAREN);
-    }
+    let patterns = if state.peek().type_ != lexer::RPAREN {
+        parse_patterns(state)
+    } else {
+        @[]
+    };
+
+    state.expect(lexer::RPAREN);
 
     ast::FunctionPattern(sym, patterns)
 }
@@ -225,11 +225,7 @@ fn parse_literal_pattern(state: @mut ParserState) -> ast::Pat {
 
 fn parse_symbol_pattern(state: @mut ParserState) -> ast::Pat {
     let (sym, _) = parse_symbol(state);
-    if state.peek_by(1).type_ == lexer::LPAREN {
-        parse_function_pattern(state)
-    } else {
-        ast::SymbolPattern(sym)
-    }
+    ast::SymbolPattern(sym)
 }
 
 fn parse_primary_pattern(state: @mut ParserState) -> ast::Pat {
@@ -248,7 +244,14 @@ fn parse_primary_pattern(state: @mut ParserState) -> ast::Pat {
         lexer::BYTES_LITERAL    |
         lexer::INTEGER_LITERAL  |
         lexer::FLOATING_LITERAL => parse_literal_pattern(state),
-        lexer::SYMBOL       => parse_symbol_pattern(state),
+        lexer::SYMBOL       => {
+            // XXX: LL(2)
+            if state.peek_by(1).type_ == lexer::LPAREN {
+                parse_function_pattern(state)
+            } else {
+                parse_symbol_pattern(state)
+            }
+        },
         _                   => {
             state.expect_any(~[lexer::UNDERSCORE,
                                lexer::ELLIPSIS,
@@ -618,6 +621,7 @@ fn parse_statement(state: @mut ParserState) -> ast::Stmt {
     match state.peek().type_ {
         lexer::LET          => parse_binding_statement(state),
         lexer::SYMBOL       => {
+            // XXX: LL(2)!
             if state.peek_by(1).type_ == lexer::ASSIGN {
                 parse_binding_statement(state)
             } else {
