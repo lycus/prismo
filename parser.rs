@@ -291,7 +291,12 @@ fn parse_program(state: @mut ParserState) -> ast::Program {
 
     if state.peek().type_ != lexer::EOF {
         match parse_statements(state) {
-            (b, _) => body = b
+            (b, trailing_semi) => {
+                body = b;
+                if !trailing_semi {
+                    state.expect(lexer::SEMICOLON);
+                }
+            }
         }
     }
 
