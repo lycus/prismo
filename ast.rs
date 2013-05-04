@@ -14,10 +14,10 @@ pub struct ModuleName(@[Sym]);
 
 #[deriving(Eq)]
 pub enum Lit {
-    IntegerLiteral(int),
-    FloatingLiteral(float),
+    IntegerLiteral(@str),
+    FloatingLiteral(@str),
     StringLiteral(@str),
-    BytesLiteral(@[u8])
+    BytesLiteral(@str)
 }
 
 pub enum Pat {

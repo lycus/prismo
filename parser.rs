@@ -70,9 +70,9 @@ fn parse_literal(state: @mut ParserState) -> ast::Exp {
     ast::Exp {
         exp: ast::LiteralExpression(match token.type_ {
             lexer::STRING_LITERAL   => ast::StringLiteral(token.value),
-            lexer::BYTES_LITERAL    => ast::BytesLiteral(at_vec::from_owned(str::to_bytes(token.value))),
-            lexer::INTEGER_LITERAL  => ast::IntegerLiteral(int::from_str(token.value).unwrap()),
-            lexer::FLOATING_LITERAL => ast::FloatingLiteral(float::from_str(token.value).unwrap()),
+            lexer::BYTES_LITERAL    => ast::BytesLiteral(token.value),
+            lexer::INTEGER_LITERAL  => ast::IntegerLiteral(token.value),
+            lexer::FLOATING_LITERAL => ast::FloatingLiteral(token.value),
             _                       => state.fail(~"irrefutable pattern match refuted?!")
         }),
 
