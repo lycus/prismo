@@ -17,6 +17,7 @@ pub mod lexer;
 pub mod parser;
 
 pub mod aster {
+    pub mod env;
     pub mod types;
 }
 
