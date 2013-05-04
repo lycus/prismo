@@ -1,9 +1,1 @@
-record List(x, xs,);
-
-a;
-a;
-a;
-fn() -> a;
-[a, b, c];
-[]
-
+import a.b;

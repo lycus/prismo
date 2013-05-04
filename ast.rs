@@ -6,7 +6,6 @@ pub struct Exp {
 #[deriving(Eq)]
 pub struct Sym(@str);
 
-
 #[deriving(Eq)]
 pub struct RecordName(@str);
 
@@ -16,21 +15,29 @@ pub struct ModuleName(@[Sym]);
 #[deriving(Eq)]
 pub enum Lit {
     IntegerLiteral(int),
-    StringLiteral(@str)
+    FloatingLiteral(float),
+    StringLiteral(@str),
+    BytesLiteral(@[u8])
 }
 
 pub enum Pat {
     // _
     AnyPattern,
 
+    // ...
+    ManyPattern,
+
     // A(a, b, c, ...)
     RecordPattern(RecordName, @[Pat]),
+
+    // a(b, c, ...)
+    FunctionPattern(Sym, @[Pat]),
 
     // [a, b, c, ...]
     ListPattern(@[Pat]),
 
     // a as a'
-    BindingPattern(Sym, @Pat),
+    BoundPattern(Sym, @Pat),
 
     // some kind of literal
     LiteralPattern(Lit),
@@ -44,25 +51,22 @@ pub enum BareExp {
     UnderscoreExpression,
 
     // if a then b [ else c ]
-    IfThenElseExpression(@Exp, @Exp, @Exp),
+    IfThenElseExpression(@Exp, @Exp, option::Option<@Exp>),
 
     // while a do b
     WhileDoExpression(@Exp, @Exp),
+
+    // match a with case b' -> b case c' -> c
+    MatchWithExpression(@Exp, @[(Pat, Exp)]),
 
     // a OP b
     BinaryExpression(@Exp, @str, @Exp),
 
     // some kind of literal
-    LiteralExpression(@Lit),
+    LiteralExpression(Lit),
 
-    // match a with case b' -> b case c' -> c
-    MatchExpression(@Exp, @[(Pat, Exp)]),
-
-    // { a; b; c }
-    ImplicitBlockExpression(@[Exp]),
-
-    // { a; b; c; }
-    BlockExpression(@[Exp]),
+    // { a; b; c } or { a; b; c; } if boolean field is true
+    BlockExpression(@[Stmt], bool),
 
     // a(b, c, d, ...)
     CallExpression(@Exp, @[Exp]),
@@ -73,23 +77,40 @@ pub enum BareExp {
     // fn (a) -> b
     LambdaExpression(@[Pat], @Exp),
 
-    // a = b
-    DeclaredBindingExpression(Pat, @Exp),
-
-    // a := b
-    NonlocalBindingExpression(Pat, @Exp),
-
     // a.b
     RecordAccessExpression(@Exp, Sym),
 
     // a:b
-    RecordFunctionBindingExpression(@Exp, Sym),
+    RecordFunctionBindExpression(@Exp, Sym),
 
     // a
     SymbolExpression(Sym),
 
     // A
     RecordNameExpression(RecordName)
+}
+
+pub struct Stmt {
+    stmt: BareStmt,
+    lineno: uint
+}
+
+pub enum BareStmt {
+    // let a = b
+    LetBindingStatement(Pat, Exp),
+
+    // a = b
+    ReassignmentStatement(Sym, Exp),
+
+    // ...
+    ExpressionStatement(Exp)
+}
+
+pub fn mk_expression_statement(exp: Exp) -> Stmt {
+    Stmt {
+        stmt: ExpressionStatement(exp),
+        lineno: exp.lineno
+    }
 }
 
 pub struct ImportDeclaration {
@@ -107,5 +128,5 @@ pub struct RecordDeclaration {
 pub struct Program {
     imports: @[ImportDeclaration],
     records: @[RecordDeclaration],
-    body: @[Exp]
+    body: @[Stmt]
 }

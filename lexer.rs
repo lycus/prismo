@@ -5,12 +5,26 @@ use core::unicode;
 #[deriving(Eq)]
 pub enum TokenType {
     EOF,
-    KEYWORD,
+    IMPORT,
+    QUALIFIED,
+    RECORD,
+    MATCH,
+    WITH,
+    CASE,
+    WHILE,
+    DO,
+    IF,
+    THEN,
+    ELSE,
+    LET,
+    AS,
+    FN,
     UNDERSCORE,
     ELLIPSIS,
     SEMICOLON,
     COMMA,
-    DOT,
+    //COLON,
+    //DOT,
     ARROW,
     LPAREN,
     RPAREN,
@@ -18,6 +32,7 @@ pub enum TokenType {
     RBRACE,
     LBRACK,
     RBRACK,
+    ASSIGN,
     OPERATOR,
     RECORD_NAME,
     SYMBOL,
@@ -114,7 +129,23 @@ fn lex_symbol(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
         n += 1
     }
 
-    (option::Some((SYMBOL, s.slice(0, n).to_managed())), n)
+    (option::Some((match s.slice(0, n) {
+        "qualified" => QUALIFIED,
+        "import" => IMPORT,
+        "record" => RECORD,
+        "match" => MATCH,
+        "while" => WHILE,
+        "case" => CASE,
+        "else" => ELSE,
+        "then" => THEN,
+        "with" => WITH,
+        "let" => LET,
+        "as" => AS,
+        "do" => DO,
+        "fn" => FN,
+        "if" => IF,
+        _ => SYMBOL
+    }, s.slice(0, n).to_managed())), n)
 }
 
 fn lex_whitespace(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
@@ -131,70 +162,23 @@ fn lex_comment(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
     (option::None, if s.char_at(0) == '#' { s.len() } else { 0 })
 }
 
-fn lex_special_character(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
+fn lex_special_characters(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
     let mut n: uint;
-
-    n = 3;
-    if s.len() >= n && ["..."].contains(&s.substr(0, n)) {
-        return (option::Some((match s.substr(0, n) {
-            "..." => ELLIPSIS,
-            _   => fail!(~"lexer failure: pattern match failed in lex_special_character (somehow!)")
-        }, s.substr(0, n).to_managed())), n);
-    }
-
-    n = 2;
-    if s.len() >= n && ["->"].contains(&s.substr(0, n)) {
-        return (option::Some((match s.substr(0, n) {
-            "->" => ARROW,
-            _   => fail!(~"lexer failure: pattern match failed in lex_special_character (somehow!)")
-        }, s.substr(0, n).to_managed())), n);
-    }
 
     n = 1;
-    if s.len() >= n && ["{", "}", "(", ")", "[", "]", ";", ",", "."].contains(&s.substr(0, n)) {
-        return (option::Some((match s.char_at(0) {
-            '{' => LBRACE,
-            '}' => RBRACE,
-            '(' => LPAREN,
-            ')' => RPAREN,
-            '[' => LBRACK,
-            ']' => RBRACK,
-            ';' => SEMICOLON,
-            ',' => COMMA,
-            '.' => DOT,
-            _   => fail!(~"lexer failure: pattern match failed in lex_special_character (somehow!)")
-        }, s.substr(0, n).to_managed())), n);
-    }
-
-    (option::None, 0)
-}
-
-fn lex_keyword(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
-    let mut n: uint;
-
-    n = 9;
-    if s.len() >= n && ["qualified"].contains(&s.substr(0, n)) {
-        return (option::Some((KEYWORD, s.substr(0, n).to_managed())), n);
-    }
-
-    n = 6;
-    if s.len() >= n && ["import", "record"].contains(&s.substr(0, n)) {
-        return (option::Some((KEYWORD, s.substr(0, n).to_managed())), n);
-    }
-
-    n = 5;
-    if s.len() >= n && ["match", "while"].contains(&s.substr(0, n)) {
-        return (option::Some((KEYWORD, s.substr(0, n).to_managed())), n);
-    }
-
-    n = 4;
-    if s.len() >= n && ["case", "else", "then", "with"].contains(&s.substr(0, n)) {
-        return (option::Some((KEYWORD, s.substr(0, n).to_managed())), n);
-    }
-
-    n = 2;
-    if s.len() >= n && ["as", "do", "fn", "if"].contains(&s.substr(0, n)) {
-        return (option::Some((KEYWORD, s.substr(0, n).to_managed())), n);
+    if s.len() >= n {
+        match s.char_at(0) {
+            '{' => return (option::Some((LBRACE, s.substr(0, n).to_managed())), n),
+            '}' => return (option::Some((RBRACE, s.substr(0, n).to_managed())), n),
+            '(' => return (option::Some((LPAREN, s.substr(0, n).to_managed())), n),
+            ')' => return (option::Some((RPAREN, s.substr(0, n).to_managed())), n),
+            '[' => return (option::Some((LBRACK, s.substr(0, n).to_managed())), n),
+            ']' => return (option::Some((RBRACK, s.substr(0, n).to_managed())), n),
+            ';' => return (option::Some((SEMICOLON, s.substr(0, n).to_managed())), n),
+            ',' => return (option::Some((COMMA, s.substr(0, n).to_managed())), n),
+            '_' => return (option::Some((UNDERSCORE, s.substr(0, n).to_managed())), n),
+            _   => return (option::None, 0)
+        }
     }
 
     (option::None, 0)
@@ -217,7 +201,14 @@ fn lex_operator(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
         n += 1
     }
 
-    (option::Some((OPERATOR, s.slice(0, n).to_managed())), n)
+    (option::Some((match s.slice(0, n) {
+        "..." => ELLIPSIS,
+        "->" => ARROW,
+        "=" => ASSIGN,
+        //"." => DOT,
+        //":" => COLON,
+        _ => OPERATOR
+    }, s.slice(0, n).to_managed())), n)
 }
 
 pub fn lex<R: io::Reader + io::ReaderUtil>(r: R) -> @[Token] {
@@ -243,9 +234,8 @@ pub fn lex<R: io::Reader + io::ReaderUtil>(r: R) -> @[Token] {
                 lex_integer_literal,
                 lex_string_literal,
                 lex_bytes_literal,
-                lex_special_character,
-                lex_keyword,
                 lex_record_name,
+                lex_special_characters,
                 lex_operator,
                 lex_symbol
             ].each |&rule| {

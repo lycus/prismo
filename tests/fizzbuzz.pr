@@ -3,10 +3,10 @@ import data.range;
 import system.io;
 
 Range(0, 100):foreach(fn (x) -> {
-    stdout:writefln(match (x % 3 == 0, x % 5 == 0) with
-        case (True, False) -> "fizz"
-        case (False, True) -> "buzz"
-        case (True, True) -> "fizzbuzz"
-        case (False, False) -> x:show()
+    stdout:writefln(match [x % 3 == 0, x % 5 == 0] with
+        case [True, False] -> "fizz"
+        case [False, True] -> "buzz"
+        case [True, True] -> "fizzbuzz"
+        case [False, False] -> x:show()
     );
 });
