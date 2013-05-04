@@ -1,5 +1,4 @@
 use ast;
-use at_vec;
 use lexer;
 
 struct ParserState {
