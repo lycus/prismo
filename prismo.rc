@@ -16,9 +16,9 @@ pub mod ast;
 pub mod lexer;
 pub mod parser;
 
-pub mod aster {
+pub mod interp {
+    pub mod aster;
     pub mod env;
-    pub mod interp;
     pub mod types;
 }
 
@@ -64,5 +64,5 @@ fn main() {
         io::println(fmt!("%?", program));
     }
 
-    aster::interp::run(@aster::env::Env::new(), program);
+    interp::aster::run(@interp::env::Env::new(), program);
 }

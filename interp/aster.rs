@@ -1,6 +1,6 @@
 use ast;
-use aster::env;
-use aster::types;
+use interp::env;
+use interp::types;
 
 pub fn run(env: @env::Env, prog: ast::Program) -> () {
     /*for prog.body.each |stmt| {
