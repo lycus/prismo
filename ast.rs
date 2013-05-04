@@ -33,6 +33,12 @@ pub enum Pat {
     // a(b, c, ...)
     FunctionPattern(Sym, @[Pat]),
 
+    // a | b
+    DisjunctivePattern(@Pat, @Pat),
+
+    // a & b
+    ConjunctivePattern(@Pat, @Pat),
+
     // [a, b, c, ...]
     ListPattern(@[Pat]),
 

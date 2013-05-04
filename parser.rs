@@ -228,6 +228,13 @@ fn parse_symbol_pattern(state: @mut ParserState) -> ast::Pat {
     ast::SymbolPattern(sym)
 }
 
+fn parse_parenthesized_pattern(state: @mut ParserState) -> ast::Pat {
+    state.expect(lexer::LPAREN);
+    let pat = parse_pattern(state);
+    state.expect(lexer::RPAREN);
+    pat
+}
+
 fn parse_primary_pattern(state: @mut ParserState) -> ast::Pat {
     match state.peek().type_ {
         lexer::UNDERSCORE   => {
@@ -239,6 +246,7 @@ fn parse_primary_pattern(state: @mut ParserState) -> ast::Pat {
             ast::ManyPattern
         },
         lexer::RECORD_NAME  => parse_record_pattern(state),
+        lexer::LPAREN       => parse_list_pattern(state),
         lexer::LBRACK       => parse_list_pattern(state),
         lexer::STRING_LITERAL   |
         lexer::BYTES_LITERAL    |
@@ -267,17 +275,50 @@ fn parse_primary_pattern(state: @mut ParserState) -> ast::Pat {
     }
 }
 
-fn parse_bound_pattern(state: @mut ParserState) -> ast::Pat {
-    let bindee = parse_primary_pattern(state);
-
-    if state.peek().type_ != lexer::AS {
-        return bindee;
+fn parse_binary_pattern(state: @mut ParserState) -> ast::Pat {
+    fn _impl(state: @mut ParserState, pat: @ast::Pat, min_precedence: uint) -> @ast::Pat {
+        let mut lhs = pat;
+        loop {
+            let op = state.peek();
+            if op.type_ != lexer::OPERATOR || precedence(op.value) < min_precedence {
+                break;
+            }
+            state.advance();
+            let mut rhs = @parse_primary_pattern(state);
+            loop {
+                let next_op = state.peek();
+                if next_op.type_ != lexer::OPERATOR || precedence(next_op.value) <= precedence(op.value) {
+                    break;
+                }
+                rhs = _impl(state, rhs, precedence(next_op.value));
+            }
+            lhs = match op.value.to_owned() {
+                ~"|" => @ast::DisjunctivePattern(lhs, rhs),
+                ~"&" => @ast::ConjunctivePattern(lhs, rhs),
+                _ => state.fail(fmt!("operator %s not allowed in patterns", op.value))
+            }
+        }
+        lhs
     }
 
-    state.advance();
+    *_impl(state, @parse_primary_pattern(state), 0)
+}
 
-    let (sym, _) = parse_symbol(state);
-    ast::BoundPattern(sym, @bindee)
+fn parse_bound_pattern(state: @mut ParserState) -> ast::Pat {
+    let mut lhs = parse_binary_pattern(state);
+
+    loop {
+        if state.peek().type_ != lexer::AS {
+            break;
+        }
+
+        state.advance();
+
+        let (sym, _) = parse_symbol(state);
+        lhs = ast::BoundPattern(sym, @lhs);
+    }
+
+    lhs
 }
 
 fn parse_pattern(state: @mut ParserState) -> ast::Pat {
