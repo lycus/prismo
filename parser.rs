@@ -80,8 +80,8 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
     let first = state.expect_with_value(lexer::KEYWORD, @"import");
     let token = state.peek();
 
-    let mut qualified = token.type_ == lexer::KEYWORD &&
-                        token.value == @"qualified";
+    let qualified = token.type_ == lexer::KEYWORD &&
+                    token.value == @"qualified";
 
     if qualified {
         state.pop();
