@@ -24,25 +24,4 @@ pub impl Env {
             vars: linear::LinearMap::new()
         }
     }
-
-    fn derive(parent: @mut Env) -> Env {
-        let mut env = Env::new();
-        env.parent = option::Some(parent);
-        env
-    }
-
-    fn find(&mut self, sym: &ast::Sym) -> option::Option<@types::Val> {
-        match self.vars.find(sym) {
-            option::None => match self.parent {
-                option::Some(parent) => parent.find(sym),
-                option::None => option::None
-            },
-
-            option::Some(x) => option::Some(*x)
-        }
-    }
-
-    fn insert(&mut self, sym: &ast::Sym, val: @types::Val) -> bool {
-        self.vars.insert(*sym, val)
-    }
 }

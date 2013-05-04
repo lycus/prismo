@@ -1,8 +1,3 @@
-pub struct Exp {
-    exp: BareExp,
-    lineno: uint
-}
-
 #[deriving(Eq)]
 pub struct Sym(@str);
 
@@ -20,6 +15,14 @@ pub enum Lit {
     BytesLiteral(@str)
 }
 
+pub enum LetPat {
+    // a(b, c, ...)
+    FunctionPattern(Sym, @[Pat]),
+
+    // ...
+    NonFunctionPattern(Pat)
+}
+
 pub enum Pat {
     // _
     AnyPattern,
@@ -29,9 +32,6 @@ pub enum Pat {
 
     // A(a, b, c, ...)
     RecordPattern(RecordName, @[Pat]),
-
-    // a(b, c, ...)
-    FunctionPattern(Sym, @[Pat]),
 
     // a | b
     DisjunctivePattern(@Pat, @Pat),
@@ -49,13 +49,18 @@ pub enum Pat {
     LiteralPattern(Lit),
 
     // a
-    SymbolPattern(Sym)
+    SymbolPattern(Sym),
+
+    // ()
+    UnitPattern
+}
+
+pub struct Exp {
+    exp: BareExp,
+    lineno: uint
 }
 
 pub enum BareExp {
-    // _
-    UnderscoreExpression,
-
     // if a then b [ else c ]
     IfThenElseExpression(@Exp, @Exp, option::Option<@Exp>),
 
@@ -93,7 +98,10 @@ pub enum BareExp {
     SymbolExpression(Sym),
 
     // A
-    RecordNameExpression(RecordName)
+    RecordNameExpression(RecordName),
+
+    // ()
+    UnitExpression
 }
 
 pub struct Stmt {
@@ -103,7 +111,7 @@ pub struct Stmt {
 
 pub enum BareStmt {
     // let a = b
-    LetBindingStatement(Pat, Exp),
+    LetBindingStatement(LetPat, Exp),
 
     // a = b
     ReassignmentStatement(Sym, Exp),

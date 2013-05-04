@@ -8,6 +8,9 @@ pub struct Fun {
 }
 
 pub enum Val {
+    // (),
+    Unit,
+
     // a
     Symbol(@ast::Sym),
 

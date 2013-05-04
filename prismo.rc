@@ -18,6 +18,7 @@ pub mod parser;
 
 pub mod aster {
     pub mod env;
+    pub mod interp;
     pub mod types;
 }
 
@@ -62,4 +63,6 @@ fn main() {
     if getopts::opt_present(&matches, "a") || getopts::opt_present(&matches, "ast") {
         io::println(fmt!("%?", program));
     }
+
+    aster::interp::run(@aster::env::Env::new(), program);
 }

@@ -186,7 +186,7 @@ fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
     ast::RecordPattern(record_name, patterns)
 }
 
-fn parse_function_pattern(state: @mut ParserState) -> ast::Pat {
+fn parse_function_pattern(state: @mut ParserState) -> ast::LetPat {
     let (sym, _) = parse_symbol(state);
 
     state.expect(lexer::LPAREN);
@@ -228,6 +228,12 @@ fn parse_symbol_pattern(state: @mut ParserState) -> ast::Pat {
     ast::SymbolPattern(sym)
 }
 
+fn parse_unit_pattern(state: @mut ParserState) -> ast::Pat {
+    state.expect(lexer::LPAREN);
+    state.expect(lexer::RPAREN);
+    ast::UnitPattern
+}
+
 fn parse_parenthesized_pattern(state: @mut ParserState) -> ast::Pat {
     state.expect(lexer::LPAREN);
     let pat = parse_pattern(state);
@@ -237,30 +243,30 @@ fn parse_parenthesized_pattern(state: @mut ParserState) -> ast::Pat {
 
 fn parse_primary_pattern(state: @mut ParserState) -> ast::Pat {
     match state.peek().type_ {
-        lexer::UNDERSCORE   => {
+        lexer::UNDERSCORE       => {
             state.advance();
             ast::AnyPattern
         },
-        lexer::ELLIPSIS     => {
+        lexer::ELLIPSIS         => {
             state.advance();
             ast::ManyPattern
         },
-        lexer::RECORD_NAME  => parse_record_pattern(state),
-        lexer::LPAREN       => parse_list_pattern(state),
-        lexer::LBRACK       => parse_list_pattern(state),
+        lexer::RECORD_NAME      => parse_record_pattern(state),
+        lexer::LPAREN           => {
+            // XXX: LL(2)
+            if state.peek_by(1).type_ == lexer::RPAREN {
+                parse_unit_pattern(state)
+            } else {
+                parse_parenthesized_pattern(state)
+            }
+        },
+        lexer::LBRACK           => parse_list_pattern(state),
         lexer::STRING_LITERAL   |
         lexer::BYTES_LITERAL    |
         lexer::INTEGER_LITERAL  |
         lexer::FLOATING_LITERAL => parse_literal_pattern(state),
-        lexer::SYMBOL       => {
-            // XXX: LL(2)
-            if state.peek_by(1).type_ == lexer::LPAREN {
-                parse_function_pattern(state)
-            } else {
-                parse_symbol_pattern(state)
-            }
-        },
-        _                   => {
+        lexer::SYMBOL           => parse_symbol_pattern(state),
+        _                       => {
             state.expect_any(~[lexer::UNDERSCORE,
                                lexer::ELLIPSIS,
                                lexer::RECORD_NAME,
@@ -323,6 +329,15 @@ fn parse_bound_pattern(state: @mut ParserState) -> ast::Pat {
 
 fn parse_pattern(state: @mut ParserState) -> ast::Pat {
     parse_bound_pattern(state)
+}
+
+fn parse_lettable_pattern(state: @mut ParserState) -> ast::LetPat {
+    // XXX: LL(2)
+    if state.peek().type_ == lexer::SYMBOL && state.peek_by(1).type_ == lexer::LPAREN {
+        parse_function_pattern(state)
+    } else {
+        ast::NonFunctionPattern(parse_pattern(state))
+    }
 }
 
 fn parse_patterns(state: @mut ParserState) -> @[ast::Pat] {
@@ -400,10 +415,27 @@ fn parse_list(state: @mut ParserState) -> ast::Exp {
     }
 }
 
+fn parse_unit(state: @mut ParserState) -> ast::Exp {
+    let token = state.expect(lexer::LPAREN);
+    state.expect(lexer::RPAREN);
+
+    ast::Exp {
+        exp: ast::UnitExpression,
+        lineno: token.lineno
+    }
+}
+
 fn parse_primary(state: @mut ParserState) -> ast::Exp {
     match state.peek().type_ {
         lexer::FN           => parse_lambda(state),
-        lexer::LPAREN       => parse_parenthesized(state),
+        lexer::LPAREN       => {
+            // XXX: LL(2)
+            if state.peek_by(1).type_ == lexer::RPAREN {
+                parse_unit(state)
+            } else {
+                parse_parenthesized(state)
+            }
+        },
         lexer::LBRACK       => parse_list(state),
         lexer::LBRACE       => parse_block(state),
         lexer::SYMBOL       => parse_symbol_expression(state),
@@ -459,7 +491,7 @@ fn parse_block(state: @mut ParserState) -> ast::Exp {
 
 fn parse_let_statement(state: @mut ParserState) -> ast::Stmt {
     let token = state.expect(lexer::LET);
-    let pat = parse_pattern(state);
+    let pat = parse_lettable_pattern(state);
     state.expect(lexer::ASSIGN);
 
     ast::Stmt {
@@ -687,7 +719,7 @@ fn parse_statement(state: @mut ParserState) -> ast::Stmt {
     match state.peek().type_ {
         lexer::LET          => parse_binding_statement(state),
         lexer::SYMBOL       => {
-            // XXX: LL(2)!
+            // XXX: LL(2)
             if state.peek_by(1).type_ == lexer::ASSIGN {
                 parse_binding_statement(state)
             } else {
