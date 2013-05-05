@@ -46,7 +46,7 @@ fn main() {
     let argv: &[~str];
 
     match vec::position(vec::tail(args), {|t|
-        t.char_at(0) != '-' && t.len() != 1
+        t.char_at(0) != '-' && t.len() > 1
     }) {
         option::None => {
             print_usage(program);
@@ -79,12 +79,12 @@ fn main() {
     }
 
     let (import_paths, r) = if filename == ~"-" {
-        (@mut [os::getcwd()], io::stdin())
+        (@[os::getcwd()], io::stdin())
     } else {
         let path = os::make_absolute(&path::Path(filename));
 
         match io::file_reader(&path) {
-            result::Ok(r) => (@mut [path.dir_path()], r),
+            result::Ok(r) => (@[path.dir_path()], r),
             result::Err(f) => fail!(f)
         }
     };
