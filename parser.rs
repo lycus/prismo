@@ -509,24 +509,9 @@ fn parse_let_statement(state: @mut ParserState) -> ast::Stmt {
     }
 }
 
-fn parse_reassignment_statement(state: @mut ParserState) -> ast::Stmt {
-    let lhs = parse_dotted_pattern(state);
-
-    let token = state.expect(lexer::ASSIGN);
-
-    match lhs {
-        ast::DottedPattern(p) => ast::Stmt {
-            stmt: ast::ReassignmentStatement(p, parse_expression(state)),
-            lineno: token.lineno
-        },
-        _ => state.fail(~":V")
-    }
-}
-
 fn parse_binding_statement(state: @mut ParserState) -> ast::Stmt {
     match state.peek().type_ {
         lexer::LET          => parse_let_statement(state),
-        lexer::SYMBOL       => parse_reassignment_statement(state),
         _                   => state.fail(~"unreachable code reached?!")
     }
 }
@@ -721,8 +706,8 @@ fn parse_binary_expression(state: @mut ParserState) -> ast::Exp {
 
 fn parse_expression(state: @mut ParserState) -> ast::Exp {
     match state.peek().type_ {
-        lexer::IF |
-        lexer::WHILE |
+        lexer::IF       |
+        lexer::WHILE    |
         lexer::MATCH        => parse_mixfix_expression(state),
         _                   => parse_binary_expression(state)
     }
@@ -730,17 +715,18 @@ fn parse_expression(state: @mut ParserState) -> ast::Exp {
 
 fn parse_statement(state: @mut ParserState) -> ast::Stmt {
     match state.peek().type_ {
-        lexer::LET          => parse_binding_statement(state),
-        lexer::SYMBOL       => {
-            // XXX: LL(2)
-            if state.peek_by(1).type_ == lexer::ASSIGN {
-                parse_binding_statement(state)
-            } else {
-                ast::mk_expression_statement(parse_expression(state))
-            }
-        },
+        lexer::LET          => parse_let_statement(state),
         _                   => {
-            ast::mk_expression_statement(parse_expression(state))
+            let exp = parse_expression(state);
+            if state.peek().type_ == lexer::ASSIGN {
+                let token = state.advance();
+                ast::Stmt {
+                    stmt: ast::ReassignmentStatement(exp, parse_expression(state)),
+                    lineno: token.lineno
+                }
+            } else {
+                ast::mk_expression_statement(exp)
+            }
         }
     }
 }

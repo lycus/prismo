@@ -117,7 +117,7 @@ pub enum BareStmt {
     LetBindingStatement(LetPat, Exp),
 
     // a = b
-    ReassignmentStatement(DottedName, Exp),
+    ReassignmentStatement(Exp, Exp),
 
     // ...
     ExpressionStatement(Exp)
