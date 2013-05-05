@@ -1,4 +1,5 @@
 use core::libc::c_void;
+use core::hashmap::linear;
 
 use ast;
 use interp::env;
@@ -33,9 +34,12 @@ pub enum Val<Interp> {
     // f(a, b, ...) = ...
     Function(@[@Fun]),
 
+    // a.{...}
+    Module(@mut linear::LinearMap<ast::Sym, @Val<Interp>>),
+
     // <routine>
     Routine(@fn (&Interp, &env::Env<Interp>) -> Val<Interp>),
 
     // <handle>
-    Handle(c_void)
+    Handle(c_void),
 }

@@ -25,6 +25,15 @@ impl to_bytes::IterBytes for ast::RecordName {
     }
 }
 
+
+impl to_bytes::IterBytes for ast::DottedName {
+    fn iter_bytes(&self, lsb0: bool, f: to_bytes::Cb) {
+        match self {
+            &ast::DottedName(s) => s.iter_bytes(lsb0, f)
+        }
+    }
+}
+
 pub struct Interp {
     record_types: @mut linear::LinearMap<@(ast::DottedName, ast::RecordName), @ast::RecordDeclaration>,
     import_paths: @[Path],
@@ -77,7 +86,10 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
 
             run_file(interp1, &path);
 
-            // TODO: import symbols
+            // qualified imports symbols from child interpreter
+            if qualified {
+                interp.root.vars.insert(ast::Sym(@"TODO"), @types::Module(interp1.root.vars));
+            }
 
             found = true;
             break;
