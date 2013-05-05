@@ -1,15 +1,16 @@
 #[link(name = "prismo",
        vers = "0.0",
-       uuid = "",
+       uuid = "c39c6bb9-51bf-4649-827d-7c384de60845",
        url = "https://github.com/rfw/prismo")];
 
 #[comment = "The Prismo programming language."];
 #[license = "MIT"];
 
-
 extern mod core;
 extern mod std;
 
+use core::at_vec;
+use core::os;
 use core::path;
 
 use std::getopts;
@@ -42,7 +43,7 @@ fn main() {
 
     let options: &[~str];
     let filename: ~str;
-    let prog_args: &[~str];
+    let argv: &[~str];
 
     match vec::position(vec::tail(args), {|t|
         t.char_at(0) != '-' && t.len() != 1
@@ -54,7 +55,7 @@ fn main() {
         option::Some(i) => {
             options = vec::slice(args, 1, i + 1);
             filename = copy args[i + 1];
-            prog_args = vec::slice(args, i + 1, vec::len(args));
+            argv = vec::slice(args, i, vec::len(args));
         }
     }
 
@@ -77,14 +78,18 @@ fn main() {
         return;
     }
 
-    let tokens = lexer::lex(if filename == ~"-" {
-        io::stdin()
+    let (import_paths, r) = if filename == ~"-" {
+        (@mut [os::getcwd()], io::stdin())
     } else {
-        match io::file_reader(&path::PosixPath(filename)) {
-            result::Ok(r) => r,
+        let path = os::make_absolute(&path::Path(filename));
+
+        match io::file_reader(&path) {
+            result::Ok(r) => (@mut [path.dir_path()], r),
             result::Err(f) => fail!(f)
         }
-    });
+    };
+
+    let tokens = lexer::lex(r);
 
     if getopts::opt_present(&matches, "t") || getopts::opt_present(&matches, "tokens") {
         io::println(fmt!("%?", tokens));
@@ -96,5 +101,8 @@ fn main() {
         io::println(fmt!("%?", program));
     }
 
-    interp::aster::run(@interp::env::Env::new(), program);
+    let interp = @mut interp::aster::Interp::new(import_paths, at_vec::from_slice(do argv.map |arg| {
+        arg.to_managed()
+    }));
+    interp::aster::run(interp, program);
 }

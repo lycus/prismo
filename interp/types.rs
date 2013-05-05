@@ -1,13 +1,14 @@
 use core::libc::c_void;
 
 use ast;
+use interp::env;
 
 pub struct Fun {
     pattern: @[@ast::Pat],
     body: @ast::Exp
 }
 
-pub enum Val {
+pub enum Val<Interp> {
     // (),
     Unit,
 
@@ -27,10 +28,13 @@ pub enum Val {
     String(~str),
 
     // A(a, b, c, ...)
-    Record(@ast::RecordDeclaration, @[@Val]),
+    Record(@ast::RecordDeclaration, @[@Val<Interp>]),
 
     // f(a, b, ...) = ...
     Function(@[@Fun]),
+
+    // <routine>
+    Routine(@fn (&Interp, &env::Env<Interp>) -> Val<Interp>),
 
     // <handle>
     Handle(c_void)

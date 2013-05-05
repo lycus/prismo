@@ -12,16 +12,16 @@ impl to_bytes::IterBytes for ast::Sym {
     }
 }
 
-pub struct Env {
-    parent: option::Option<@mut Env>,
-    vars: linear::LinearMap<ast::Sym, @types::Val>
+pub struct Env<Interp> {
+    parent: @mut option::Option<@mut Env<Interp>>,
+    vars: @mut linear::LinearMap<ast::Sym, @types::Val<Interp>>
 }
 
-pub impl Env {
-    fn new() -> Env {
+pub impl <Interp> Env<Interp> {
+    fn new() -> Env<Interp> {
         Env {
-            parent: option::None,
-            vars: linear::LinearMap::new()
+            parent: @mut option::None,
+            vars: @mut linear::LinearMap::new()
         }
     }
 }
