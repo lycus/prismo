@@ -1,0 +1,17 @@
+import data.option;
+
+let foreach(iterable, f) = {
+    iterator = iterable:iter();
+    while true do {
+        match iterator:next() with
+            case ()         -> break
+            case Some(x)    -> x
+    };
+};
+
+let reduce(iterable, f, z) = {
+    iterable:foreach(fn (x) -> {
+        z = f(x, z);
+    });
+    z
+};

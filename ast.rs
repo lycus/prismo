@@ -5,7 +5,7 @@ pub struct Sym(@str);
 pub struct RecordName(@str);
 
 #[deriving(Eq)]
-pub struct ModuleName(@[Sym]);
+pub struct DottedName(@[Sym]);
 
 #[deriving(Eq)]
 pub enum Lit {
@@ -17,10 +17,13 @@ pub enum Lit {
 
 pub enum LetPat {
     // a(b, c, ...)
-    FunctionPattern(Sym, @[Pat]),
+    FunctionPattern(DottedName, @[Pat]),
+
+    // a.b.c
+    DottedPattern(DottedName),
 
     // ...
-    NonFunctionPattern(Pat)
+    BasicPattern(Pat)
 }
 
 pub enum Pat {
@@ -114,7 +117,7 @@ pub enum BareStmt {
     LetBindingStatement(LetPat, Exp),
 
     // a = b
-    ReassignmentStatement(Sym, Exp),
+    ReassignmentStatement(DottedName, Exp),
 
     // ...
     ExpressionStatement(Exp)
@@ -128,7 +131,7 @@ pub fn mk_expression_statement(exp: Exp) -> Stmt {
 }
 
 pub struct ImportDeclaration {
-    module: ModuleName,
+    module: DottedName,
     qualified: bool,
     lineno: uint
 }

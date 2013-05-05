@@ -79,7 +79,7 @@ fn parse_literal(state: @mut ParserState) -> ast::Exp {
     }
 }
 
-fn parse_module_name(state: @mut ParserState) -> ast::ModuleName {
+fn parse_dotted_name(state: @mut ParserState) -> ast::DottedName {
     let (part, _) = parse_symbol(state);
     let mut parts = @[part];
 
@@ -95,7 +95,7 @@ fn parse_module_name(state: @mut ParserState) -> ast::ModuleName {
         parts += [part];
     }
 
-    ast::ModuleName(parts)
+    ast::DottedName(parts)
 }
 
 fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
@@ -107,7 +107,7 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
     }
 
     ast::ImportDeclaration {
-        module: parse_module_name(state),
+        module: parse_dotted_name(state),
         qualified: qualified,
         lineno: first.lineno
     }
@@ -186,10 +186,18 @@ fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
     ast::RecordPattern(record_name, patterns)
 }
 
-fn parse_function_pattern(state: @mut ParserState) -> ast::LetPat {
-    let (sym, _) = parse_symbol(state);
+fn parse_dotted_pattern(state: @mut ParserState) -> ast::LetPat {
+    ast::DottedPattern(parse_dotted_name(state))
+}
 
-    state.expect(lexer::LPAREN);
+fn parse_function_pattern(state: @mut ParserState) -> ast::LetPat {
+    let lhs = parse_dotted_name(state);
+
+    if state.peek().type_ != lexer::LPAREN {
+        return ast::DottedPattern(lhs)
+    }
+
+    state.advance();
 
     let patterns = if state.peek().type_ != lexer::RPAREN {
         parse_patterns(state)
@@ -199,7 +207,7 @@ fn parse_function_pattern(state: @mut ParserState) -> ast::LetPat {
 
     state.expect(lexer::RPAREN);
 
-    ast::FunctionPattern(sym, patterns)
+    ast::FunctionPattern(lhs, patterns)
 }
 
 fn parse_list_pattern(state: @mut ParserState) -> ast::Pat {
@@ -333,10 +341,11 @@ fn parse_pattern(state: @mut ParserState) -> ast::Pat {
 
 fn parse_lettable_pattern(state: @mut ParserState) -> ast::LetPat {
     // XXX: LL(2)
-    if state.peek().type_ == lexer::SYMBOL && state.peek_by(1).type_ == lexer::LPAREN {
+    if state.peek().type_ == lexer::SYMBOL && (state.peek_by(1).type_ == lexer::LPAREN ||
+                                               state.peek_by(1).type_ == lexer::DOT) {
         parse_function_pattern(state)
     } else {
-        ast::NonFunctionPattern(parse_pattern(state))
+        ast::BasicPattern(parse_pattern(state))
     }
 }
 
@@ -501,13 +510,16 @@ fn parse_let_statement(state: @mut ParserState) -> ast::Stmt {
 }
 
 fn parse_reassignment_statement(state: @mut ParserState) -> ast::Stmt {
-    let (sym, lineno) = parse_symbol(state);
+    let lhs = parse_dotted_pattern(state);
 
-    state.expect(lexer::ASSIGN);
+    let token = state.expect(lexer::ASSIGN);
 
-    ast::Stmt {
-        stmt: ast::ReassignmentStatement(sym, parse_expression(state)),
-        lineno: lineno
+    match lhs {
+        ast::DottedPattern(p) => ast::Stmt {
+            stmt: ast::ReassignmentStatement(p, parse_expression(state)),
+            lineno: token.lineno
+        },
+        _ => state.fail(~":V")
     }
 }
 
@@ -527,6 +539,7 @@ fn parse_if_then_else(state: @mut ParserState) -> ast::Exp {
 
     ast::Exp {
         exp: ast::IfThenElseExpression(@pred, @consequent, if state.peek().type_ == lexer::ELSE {
+            state.advance();
             option::Some(@parse_expression(state))
         } else {
             option::None
