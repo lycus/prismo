@@ -10,6 +10,8 @@
 extern mod core;
 extern mod std;
 
+use core::path;
+
 use std::getopts;
 
 pub mod ast;
@@ -22,11 +24,12 @@ pub mod interp {
     pub mod types;
 }
 
-fn print_help() {
-    let args = os::args();
-    let program = copy args[0];
+fn print_usage(program: &str) {
+    io::println(fmt!("Usage: %s [options...] FILE [args...]", program));
+}
 
-    io::println(fmt!("Usage: %s [options]", program));
+fn print_help(program: &str) {
+    print_usage(program);
     io::println("");
     io::println("   -t, --tokens   Dump token stream.");
     io::println("   -a, --ast      Dump AST.");
@@ -35,6 +38,25 @@ fn print_help() {
 
 fn main() {
     let args = os::args();
+    let program = copy args[0];
+
+    let options: &[~str];
+    let filename: ~str;
+    let prog_args: &[~str];
+
+    match vec::position(vec::tail(args), {|t|
+        t.char_at(0) != '-' && t.len() != 1
+    }) {
+        option::None => {
+            print_usage(program);
+            fail!(~"file to run not specified")
+        },
+        option::Some(i) => {
+            options = vec::slice(args, 1, i + 1);
+            filename = copy args[i + 1];
+            prog_args = vec::slice(args, i + 1, vec::len(args));
+        }
+    }
 
     let opts = ~[
         getopts::optflag("t"), getopts::optflag("tokens"),
@@ -42,17 +64,27 @@ fn main() {
         getopts::optflag("h"), getopts::optflag("help")
     ];
 
-    let matches = match getopts::getopts(vec::tail(args), opts) {
+    let matches = match getopts::getopts(options, opts) {
         result::Ok(m) => m,
-        result::Err(f) => fail!(getopts::fail_str(f))
+        result::Err(f) => {
+            print_usage(program);
+            fail!(getopts::fail_str(f))
+        }
     };
 
     if getopts::opt_present(&matches, "h") || getopts::opt_present(&matches, "help") {
-        print_help();
+        print_help(program);
         return;
     }
 
-    let tokens = lexer::lex(io::stdin());
+    let tokens = lexer::lex(if filename == ~"-" {
+        io::stdin()
+    } else {
+        match io::file_reader(&path::PosixPath(filename)) {
+            result::Ok(r) => r,
+            result::Err(f) => fail!(f)
+        }
+    });
 
     if getopts::opt_present(&matches, "t") || getopts::opt_present(&matches, "tokens") {
         io::println(fmt!("%?", tokens));
