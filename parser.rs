@@ -704,7 +704,7 @@ fn parse_binary_expression(state: @mut ParserState) -> ast::Exp {
     *_impl(state, @parse_postfix_expression(state), 0)
 }
 
-fn parse_expression(state: @mut ParserState) -> ast::Exp {
+fn parse_basic_expression(state: @mut ParserState) -> ast::Exp {
     match state.peek().type_ {
         lexer::IF       |
         lexer::WHILE    |
@@ -713,21 +713,27 @@ fn parse_expression(state: @mut ParserState) -> ast::Exp {
     }
 }
 
+fn parse_assignment_expression(state: @mut ParserState) -> ast::Exp {
+    let lhs = parse_basic_expression(state);
+    if state.peek().type_ == lexer::ASSIGN {
+        let token = state.advance();
+        ast::Exp {
+            exp: ast::AssignmentExpression(@lhs, @parse_assignment_expression(state)),
+            lineno: token.lineno
+        }
+    } else {
+        lhs
+    }
+}
+
+fn parse_expression(state: @mut ParserState) -> ast::Exp {
+    parse_assignment_expression(state)
+}
+
 fn parse_statement(state: @mut ParserState) -> ast::Stmt {
     match state.peek().type_ {
         lexer::LET          => parse_let_statement(state),
-        _                   => {
-            let exp = parse_expression(state);
-            if state.peek().type_ == lexer::ASSIGN {
-                let token = state.advance();
-                ast::Stmt {
-                    stmt: ast::ReassignmentStatement(exp, parse_expression(state)),
-                    lineno: token.lineno
-                }
-            } else {
-                ast::mk_expression_statement(exp)
-            }
-        }
+        _                   => ast::mk_expression_statement(parse_expression(state))
     }
 }
 

@@ -103,6 +103,9 @@ pub enum BareExp {
     // A
     RecordNameExpression(RecordName),
 
+    // a = b
+    AssignmentExpression(@Exp, @Exp),
+
     // ()
     UnitExpression
 }
@@ -115,9 +118,6 @@ pub struct Stmt {
 pub enum BareStmt {
     // let a = b
     LetBindingStatement(LetPat, Exp),
-
-    // a = b
-    ReassignmentStatement(Exp, Exp),
 
     // ...
     ExpressionStatement(Exp)
