@@ -277,7 +277,7 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
 
             for exps.each |exp| {
                 vals += [eval_exp(interp, env, exp)];
-                if !frame.exception.is_none() {
+                if frame.exception.is_some() {
                     return @mut types::Unit;
                 }
             }
@@ -294,7 +294,12 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
             }
         },
         ast::AccessExpression(lhs, sym) => {
-            match *eval_exp(interp, env, lhs) {
+            let v = eval_exp(interp, env, lhs);
+
+            if frame.exception.is_some() {
+                return @mut types::Unit;
+            }
+            match *v {
                 types::Module(vars) => match vars.find(&sym) {
                     option::Some(x) => *x,
                     option::None => {
@@ -302,7 +307,15 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                         @mut types::Unit
                     }
                 },
-                types::Record(decl, vars) => fail!(~"not implemented: record access"),
+                types::Record(decl, vars) => {
+                    match decl.slots.position_elem(&sym) {
+                        option::Some(i) => vars[i],
+                        option::None => {
+                            frame.exception = @mut option::Some(@mut types::String(fmt!("slot `%s` not found in record", *sym).to_managed()));
+                            @mut types::Unit
+                        }
+                    }
+                },
                 _ => {
                     frame.exception = @mut option::Some(@mut types::String(fmt!("cannot acccess `%s` of non-record/module", *sym).to_managed()));
                     @mut types::Unit
@@ -317,12 +330,21 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
             }
 
             for body.each |stmt| {
-                exec_stmt(interp, env, stmt)
+                exec_stmt(interp, env, stmt);
+                if frame.exception.is_some() {
+                    return @mut types::Unit;
+                }
             }
 
             if !trailing_semicolon {
                 match stmts[stmts.len() - 1].stmt {
-                    ast::ExpressionStatement(exp) => eval_exp(interp, env, &exp),
+                    ast::ExpressionStatement(exp) => {
+                        let r = eval_exp(interp, env, &exp);
+                        if frame.exception.is_some() {
+                            return @mut types::Unit;
+                        }
+                        r
+                    },
                     _ => {
                         frame.exception = @mut option::Some(@mut types::String(@"last statement of block is not an expression"));
                         @mut types::Unit
@@ -348,7 +370,9 @@ fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) 
                 frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
             }
         },
-        ast::ExpressionStatement(exp) => { eval_exp(interp, env, &exp); }
+        ast::ExpressionStatement(exp) => {
+            eval_exp(interp, env, &exp);
+        }
     };
 }
 
