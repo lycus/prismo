@@ -275,7 +275,7 @@ fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast:
 fn apply_exp(interp: @mut Interp, env: @mut env::Env<Interp>, f: @[types::Fun<Interp>], args: @[@mut types::Val<Interp>]) -> @mut types::Val<Interp> {
     let frame = interp.current_frame.unwrap();
 
-    let funs = sort::merge_sort(f, |lhs, rhs| -ast::ListPattern((*lhs).pattern).specificity() < -ast::ListPattern((*rhs).pattern).specificity());
+    let funs = f; //sort::merge_sort(f, |lhs, rhs| -ast::ListPattern((*lhs).pattern).specificity() < -ast::ListPattern((*rhs).pattern).specificity());
     let vals = @mut types::List(args);
 
     for funs.each |fun| {
