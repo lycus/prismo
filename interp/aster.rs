@@ -297,6 +297,7 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
 
     for prog.records.each |rec| {
         interp.record_types.insert(@rec.name, @*rec);
+        // TODO: generate record constructors
     }
 
     for prog.body.each |stmt| {
