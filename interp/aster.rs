@@ -43,6 +43,7 @@ pub struct Interp {
     argv: @[@str],
     filename: @str,
     loaded_files: @[Path], // TODO: implement me!
+    operators: @mut linear::LinearMap<@str, @[types::Fun<Interp>]>,
     current_frame: @mut option::Option<@mut Frame>
 }
 
@@ -55,6 +56,7 @@ pub impl Interp {
             argv: argv,
             filename: @"?",
             loaded_files: @[],
+            operators: @mut linear::LinearMap::new(),
             current_frame: @mut option::None
         }
     }
@@ -270,6 +272,38 @@ fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast:
     }
 }
 
+fn apply_exp(interp: @mut Interp, env: @mut env::Env<Interp>, f: @[types::Fun<Interp>], args: @[@mut types::Val<Interp>]) -> @mut types::Val<Interp> {
+    let frame = interp.current_frame.unwrap();
+
+    let funs = sort::merge_sort(f, |lhs, rhs| -ast::ListPattern((*lhs).pattern).specificity() < -ast::ListPattern((*rhs).pattern).specificity());
+    let vals = @mut types::List(args);
+
+    for funs.each |fun| {
+        let pat = ast::ListPattern(fun.pattern);
+        let child_env = @mut env::Env::new();
+        if unify_pattern_basic(interp, child_env, &pat, vals) {
+            // wind a new frame
+            let mut frame = wind(interp, env, fun.filename, fun.body.lineno);
+
+            child_env.parent = @option::Some(fun.env);
+            let r = eval_exp(interp, child_env, fun.body);
+
+            if frame.exception.is_some() {
+                return @mut types::Unit;
+            } else {
+                // unwind the frame if we don't have an exception.
+                unwind(interp)
+            }
+
+            return r;
+        }
+    }
+
+    frame.exception = @mut option::Some(@mut types::String(@"no matching overload found"));
+    return @mut types::Unit;
+
+}
+
 fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> @mut types::Val<Interp> {
     let frame = interp.current_frame.unwrap();
 
@@ -442,50 +476,24 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                 return @mut types::Unit;
             }
 
-            let mut raw_vals = @[];
+            let mut args_e = @[];
             for args.each |arg| {
-                raw_vals += [eval_exp(interp, env, arg)];
+                args_e += [eval_exp(interp, env, arg)];
                 if frame.exception.is_some() {
                     return @mut types::Unit;
                 }
             }
 
-            let vals = @mut types::List(raw_vals);
-
             match *f_e {
                 types::Function(funs) => {
-                    let funs = sort::merge_sort(funs, |lhs, rhs| -ast::ListPattern((*lhs).pattern).specificity() < -ast::ListPattern((*rhs).pattern).specificity());
-
-                    for funs.each |fun| {
-                        let pat = ast::ListPattern(fun.pattern);
-                        let child_env = @mut env::Env::new();
-                        if unify_pattern_basic(interp, child_env, &pat, vals) {
-                            // wind a new frame
-                            let mut frame = wind(interp, env, fun.filename, fun.body.lineno);
-
-                            child_env.parent = @option::Some(fun.env);
-                            let r = eval_exp(interp, child_env, fun.body);
-
-                            if frame.exception.is_some() {
-                                return @mut types::Unit;
-                            } else {
-                                // unwind the frame if we don't have an exception.
-                                unwind(interp)
-                            }
-
-                            return r;
-                        }
-                    }
-
-                    frame.exception = @mut option::Some(@mut types::String(@"no matching overload found"));
-                    return @mut types::Unit;
+                    apply_exp(interp, env, funs, args_e)
                 },
                 types::Constructor(decl) => {
-                    if decl.slots.len() != raw_vals.len() {
+                    if decl.slots.len() != args_e.len() {
                         frame.exception = @mut option::Some(@mut types::String(@"incorrect number of arguments"));
                         return @mut types::Unit;
                     } else {
-                        return @mut types::Record(decl, raw_vals);
+                        return @mut types::Record(decl, args_e);
                     }
                 }
                 _ => {
@@ -494,7 +502,31 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                 }
             }
         },
-        _ => fail!(~"not implemented: full expression evaluation")
+        ast::BinaryExpression(lhs, op, rhs) => {
+            let lhs_e = eval_exp(interp, env, lhs);
+
+            if frame.exception.is_some() {
+                return @mut types::Unit;
+            }
+
+            let rhs_e = eval_exp(interp, env, rhs);
+
+            if frame.exception.is_some() {
+                return @mut types::Unit;
+            }
+
+            match interp.operators.find(&op) {
+                option::None => {
+                    frame.exception = @mut option::Some(@mut types::String(fmt!("operator %s not found", op).to_managed()));
+                    @mut types::Unit
+                },
+                option::Some(f) => {
+                    apply_exp(interp, env, *f, @[lhs_e, rhs_e])
+                }
+            }
+        },
+        ast::FunctionBindExpression(lhs, sym) => fail!(~"not implemented: function bind"),
+        ast::AssignmentExpression(lhs, rhs) => fail!(~"not implemented: assignment")
     };
 
     // if we ended up with a routine, run the routine
