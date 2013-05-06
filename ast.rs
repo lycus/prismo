@@ -109,7 +109,7 @@ pub enum BareExp {
     LambdaExpression(@[Pat], @Exp),
 
     // a.b
-    RecordAccessExpression(@Exp, Sym),
+    AccessExpression(@Exp, Sym),
 
     // a:b
     RecordFunctionBindExpression(@Exp, Sym),

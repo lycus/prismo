@@ -50,3 +50,8 @@ pub fn find<Interp>(env: @mut Env<Interp>, sym: &ast::Sym) -> option::Option<@mu
     }
 }
 
+pub fn merge_into_shallow<Interp>(env: @mut Env<Interp>, other: @mut Env<Interp>) -> () {
+    for other.vars.mutate_values |k, v| {
+        env.vars.insert(*k, *v);
+    }
+}

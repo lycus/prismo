@@ -40,6 +40,7 @@ pub struct Interp {
     root: @mut env::Env<Interp>,
     argv: @[@str],
     filename: @str,
+    loaded_files: @[Path], // TODO: implement me!
     current_frame: @mut option::Option<@mut Frame>
 }
 
@@ -51,6 +52,7 @@ pub impl Interp {
             root: @mut env::Env::new(),
             argv: argv,
             filename: filename,
+            loaded_files: @[],
             current_frame: @mut option::None
         }
     }
@@ -125,20 +127,20 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
                 env::declare(interp.root, &module_name,
                              @mut types::Module(interp1.root.vars));
 
-                for interp1.record_types.each_key |k| {
+                for interp1.record_types.mutate_values |k, v| {
                     interp.record_types.insert(match *k {
                         @ast::RecordName(modu, name) => @ast::RecordName(@ast::DottedName(**modu + [module_name]), name)
-                    }, *interp1.record_types.find(k).unwrap());
+                    }, *v);
                 }
             } else {
                 // otherwise we just plop all the symbols in
-                for interp1.root.vars.each_key |k| {
-                    env::declare(interp.root, k, *interp1.root.vars.find(k).unwrap());
+                for interp1.root.vars.mutate_values |k, v| {
+                    env::declare(interp.root, k, *v);
                 }
 
                 // import record types
-                for interp1.record_types.each_key |k| {
-                    interp.record_types.insert(*k, *interp1.record_types.find(k).unwrap());
+                for interp1.record_types.mutate_values |k, v| {
+                    interp.record_types.insert(*k, *v);
                 }
             }
 
@@ -152,10 +154,11 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     };
 }
 
-fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
-    // perform pattern matching of basic patterns -- if a match fails, we leave all the symbols in
-    // scope and not care. this is pretty bad.
-    match *pat {
+fn unify_pattern_basic(interp: @mut Interp, in_env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
+    // allocate a temporary environment for pattern matching
+    let mut env = @mut env::Env::new();
+
+    if match *pat {
         ast::AnyPattern => true,
         ast::ManyPattern => false,
         ast::UnitPattern => match *val {
@@ -243,13 +246,18 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
             },
             _ => false
         }
+    } {
+        env::merge_into_shallow(in_env, env);
+        true
+    } else {
+        false
     }
 }
 
 fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::LetPat, val: @mut types::Val<Interp>) -> bool {
     match *pat {
         ast::BasicPattern(pat) => unify_pattern_basic(interp, env, &pat, val),
-        _ => fail!(~":V")
+        _ => fail!(~"not implemented: full let-pattern unify")
     }
 }
 
@@ -285,7 +293,20 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                 }
             }
         },
-        _ => fail!(~":V")
+        ast::AccessExpression(lhs, sym) => {
+            match *eval_exp(interp, env, lhs) {
+                types::Module(vars) => match vars.find(&sym) {
+                    option::Some(x) => *x,
+                    option::None => {
+                        frame.exception = @mut option::Some(@mut types::String(fmt!("symbol `%s` not found in module", *sym).to_managed()));
+                        @mut types::Unit
+                    }
+                },
+
+                _ => fail!(~"not implemented: non-module access")
+            }
+        }
+        _ => fail!(~"not implemented: full expression evaluation")
     };
 
     r

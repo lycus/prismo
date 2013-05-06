@@ -80,16 +80,26 @@ fn main() {
         return;
     }
 
-    let (filename, import_paths, r) = if filename == ~"-" {
-        (@"<stdin>", @[os::getcwd()], io::stdin())
+    let mut import_paths = @[];
+
+    let (filename, r) = if filename == ~"-" {
+        import_paths += @[os::getcwd()];
+        (@"<stdin>", io::stdin())
     } else {
         let path = os::make_absolute(&path::Path(filename));
+        import_paths += @[path.dir_path()];
 
         match io::file_reader(&path) {
-            result::Ok(r) => (path.to_str().to_managed(), @[path.dir_path()], r),
+            result::Ok(r) => (path.to_str().to_managed(), r),
             result::Err(f) => fail!(f)
         }
     };
+
+    for os::env().each |&(k, v)| {
+        if k == ~"PRISMO_PATH" {
+            import_paths += @[path::Path(v)];
+        }
+    }
 
     let tokens = lexer::lex(r);
 
@@ -113,6 +123,6 @@ fn main() {
         for interp.root.vars.each_key |k| {
             io::println(fmt!("%s: %?", **k, *interp.root.vars.find(k).unwrap()));
         }
-        io::println("ENV OF ENV");
+        io::println("END OF ENV");
     }
 }

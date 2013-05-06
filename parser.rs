@@ -52,24 +52,27 @@ fn parse_symbol(state: @mut ParserState) -> (ast::Sym, uint) {
     (ast::Sym(token.value), token.lineno)
 }
 
-fn parse_symbol_expression(state: @mut ParserState) -> ast::Exp {
-    let (sym, lineno) = match state.peek().type_ {
+fn parse_symbol_or_record_name(state: @mut ParserState) -> (ast::Sym, uint) {
+    match state.peek().type_ {
         lexer::SYMBOL => {
-            let (sym, lineno) = parse_symbol(state);
-            (sym, lineno)
-        },
+            parse_symbol(state)
+        }
 
         lexer::RECORD_NAME => {
-            let (ast::RecordName(_, sym), lineno) = parse_record_name(state);
-            (ast::Sym(sym), lineno)
-        },
+            let token = state.advance();
+            (ast::Sym(token.value), token.lineno)
+        }
 
         _ => {
             state.expect_any(~[lexer::SYMBOL,
                                lexer::RECORD_NAME]);
             state.fail(~"unreachable code reached?!");
         }
-    };
+    }
+}
+
+fn parse_symbol_expression(state: @mut ParserState) -> ast::Exp {
+    let (sym, lineno) = parse_symbol_or_record_name(state);
 
     ast::Exp {
         exp: ast::SymbolExpression(sym),
@@ -644,7 +647,7 @@ fn parse_postfix_expression(state: @mut ParserState) -> ast::Exp {
             lexer::COLON => {
                 state.advance();
 
-                let (sym, _) = parse_symbol(state);
+                let (sym, _) = parse_symbol_or_record_name(state);
 
                 lhs = ast::Exp {
                     exp: ast::RecordFunctionBindExpression(@lhs, sym),
@@ -655,10 +658,10 @@ fn parse_postfix_expression(state: @mut ParserState) -> ast::Exp {
             lexer::DOT => {
                 state.advance();
 
-                let (sym, _) = parse_symbol(state);
+                let (sym, _) = parse_symbol_or_record_name(state);
 
                 lhs = ast::Exp {
-                    exp: ast::RecordAccessExpression(@lhs, sym),
+                    exp: ast::AccessExpression(@lhs, sym),
                     lineno: token.lineno
                 };
             },
