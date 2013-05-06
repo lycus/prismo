@@ -33,7 +33,7 @@ pub enum Val<Interp> {
     List(@[@mut Val<Interp>]),
 
     // A(a, b, c, ...)
-    Record(@ast::RecordDeclaration, @[@Val<Interp>]),
+    Record(@ast::RecordDeclaration, @[@mut Val<Interp>]),
 
     // <record constructor>
     RecordConstructor(@ast::RecordDeclaration),

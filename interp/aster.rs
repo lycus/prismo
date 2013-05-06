@@ -178,7 +178,31 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
         ast::ConjunctivePattern(pat1, pat2) => {
             unify_pattern_basic(interp, env, pat1, val) && unify_pattern_basic(interp, env, pat2, val)
         },
-        ast::RecordPattern(pat_decl, pats) => fail!(~":V"),
+        ast::RecordPattern(name, pats) => match *val {
+            types::Record(_, vals) => {
+                // look up the decl in the interpreter and check if it's our decl
+                match interp.record_types.find(&@name) {
+                    option::None => false,
+                    option::Some(decl) => {
+                        // check we're matching out the correct number of slots
+                        // TODO: ManyPattern
+                        if pats.len() != vals.len() {
+                            false
+                        } else {
+                            let mut ok = true;
+                            let mut i = 0;
+                            while i < pats.len() - 1 {
+                                ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
+                                if !ok { break; };
+                                i += 1;
+                            }
+                            ok
+                        }
+                    }
+                }
+            },
+            _ => false
+        },
         ast::ListPattern(pats) => match *val {
             types::List(vals) => {
                 if vals.len() < pats.len() {
@@ -252,7 +276,7 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
         },
         ast::SymbolExpression(sym) => {
             match env::find(env, &sym) {
-                option::Some(x) => types::Unit,
+                option::Some(x) => types::Unit, // TODO,
                 option::None => {
                     frame.exception = @mut option::Some(@mut types::String(fmt!("symbol `%s` not found in scope", *sym).to_managed()));
                     types::Unit

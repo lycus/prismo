@@ -53,7 +53,24 @@ fn parse_symbol(state: @mut ParserState) -> (ast::Sym, uint) {
 }
 
 fn parse_symbol_expression(state: @mut ParserState) -> ast::Exp {
-    let (sym, lineno) = parse_symbol(state);
+    let (sym, lineno) = match state.peek().type_ {
+        lexer::SYMBOL => {
+            let (sym, lineno) = parse_symbol(state);
+            (sym, lineno)
+        },
+
+        lexer::RECORD_NAME => {
+            let (ast::RecordName(_, sym), lineno) = parse_record_name(state);
+            (ast::Sym(sym), lineno)
+        },
+
+        _ => {
+            state.expect_any(~[lexer::SYMBOL,
+                               lexer::RECORD_NAME]);
+            state.fail(~"unreachable code reached?!");
+        }
+    };
+
     ast::Exp {
         exp: ast::SymbolExpression(sym),
         lineno: lineno
@@ -223,23 +240,8 @@ fn parse_literal_pattern(state: @mut ParserState) -> ast::Pat {
 }
 
 fn parse_symbol_pattern(state: @mut ParserState) -> ast::Pat {
-    match state.peek().type_ {
-        lexer::SYMBOL => {
-            let (sym, _) = parse_symbol(state);
-            ast::SymbolPattern(sym)
-        },
-
-        lexer::RECORD_NAME => {
-            let (ast::RecordName(_, sym), _) = parse_record_name(state);
-            ast::SymbolPattern(ast::Sym(sym))
-        },
-
-        _ => {
-            state.expect_any(~[lexer::SYMBOL,
-                               lexer::RECORD_NAME]);
-            state.fail(~"unreachable code reached?!");
-        }
-    }
+    let (sym, _) = parse_symbol(state);
+    ast::SymbolPattern(sym)
 }
 
 fn parse_unit_pattern(state: @mut ParserState) -> ast::Pat {
