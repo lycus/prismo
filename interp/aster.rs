@@ -183,15 +183,17 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
                 // look up the decl in the interpreter and check if it's our decl
                 match interp.record_types.find(&@name) {
                     option::None => false,
-                    option::Some(decl) => {
+                    option::Some(_) => {
                         // check we're matching out the correct number of slots
                         // TODO: ManyPattern
                         if pats.len() != vals.len() {
                             false
+                        } else if pats.len() == 0 {
+                            true
                         } else {
                             let mut ok = true;
                             let mut i = 0;
-                            while i < pats.len() - 1 {
+                            while i < pats.len() {
                                 ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
                                 if !ok { break; };
                                 i += 1;
@@ -251,13 +253,13 @@ fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast:
     }
 }
 
-fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> types::Val<Interp> {
+fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> @mut types::Val<Interp> {
     let frame = interp.current_frame.unwrap();
 
     let r = match exp.exp {
-        ast::UnitExpression => types::Unit,
-        ast::LiteralExpression(l) => types::gen_lit(l),
-        ast::LambdaExpression(pat, exp) => types::Function(@[types::Fun {
+        ast::UnitExpression => @mut types::Unit,
+        ast::LiteralExpression(l) => @mut types::gen_lit(l),
+        ast::LambdaExpression(pat, exp) => @mut types::Function(@[types::Fun {
             pattern: pat,
             body: exp,
             env: env
@@ -266,20 +268,20 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
             let mut vals = @[];
 
             for exps.each |exp| {
-                vals += [@mut eval_exp(interp, env, exp)];
+                vals += [eval_exp(interp, env, exp)];
                 if !frame.exception.is_none() {
-                    return types::Unit;
+                    return @mut types::Unit;
                 }
             }
 
-            types::List(vals)
+            @mut types::List(vals)
         },
         ast::SymbolExpression(sym) => {
             match env::find(env, &sym) {
-                option::Some(x) => types::Unit, // TODO,
+                option::Some(x) => x,
                 option::None => {
                     frame.exception = @mut option::Some(@mut types::String(fmt!("symbol `%s` not found in scope", *sym).to_managed()));
-                    types::Unit
+                    @mut types::Unit
                 }
             }
         },
@@ -294,7 +296,7 @@ fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) 
 
     match stmt.stmt {
         ast::LetBindingStatement(pat, exp) => {
-            if !unify_pattern_let(interp, env, &pat, @mut eval_exp(interp, env, &exp)) {
+            if !unify_pattern_let(interp, env, &pat, eval_exp(interp, env, &exp)) {
                 // uh oh, we need to throw an exception and unwind
                 frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
             }
