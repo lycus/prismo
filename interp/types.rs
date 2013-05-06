@@ -61,7 +61,7 @@ pub fn repr<Interp>(v: @mut Val<Interp>) -> ~str {
         @Boolean(b)         => if b { ~"True" } else { ~"False" },
         @List(xs)           => fmt!("[%s]", str::connect(xs.map(|x| repr(*x)), ", ")),
         @Record(decl, vs)   => fmt!("%?(%s)", decl.name, str::connect(vs.map(|x| repr(*x)), ", ")),
-        @Constructor(decl)  => fmt!("%?", decl.name),
+        @Constructor(decl)  => fmt!("<constructor for %?>", decl.name),
         @Function(_)        => ~"<function>",
         @Module(_)          => ~"<module>",
         @Routine(_)         => ~"<routine>",

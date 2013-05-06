@@ -474,14 +474,22 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                         }
                     }
 
-                    frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
+                    frame.exception = @mut option::Some(@mut types::String(@"no matching overload found"));
+                    return @mut types::Unit;
                 },
+                types::Constructor(decl) => {
+                    if decl.slots.len() != raw_vals.len() {
+                        frame.exception = @mut option::Some(@mut types::String(@"incorrect number of arguments"));
+                        return @mut types::Unit;
+                    } else {
+                        return @mut types::Record(decl, raw_vals);
+                    }
+                }
                 _ => {
                     frame.exception = @mut option::Some(@mut types::String(@"left-hand side is not callable"));
+                    return @mut types::Unit;
                 }
             }
-
-            @mut types::Unit
         },
         _ => fail!(~"not implemented: full expression evaluation")
     };

@@ -1,0 +1,6 @@
+let i = fn(x) -> x;
+let k = fn(x) -> fn(y) -> x;
+let s = fn(x) -> fn(y) -> fn(z) -> x(z)(y(z));
+
+let x = i(1);
+let y = s(k)(k)(21);
