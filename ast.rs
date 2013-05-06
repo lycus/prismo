@@ -100,9 +100,6 @@ pub enum BareExp {
     // a
     SymbolExpression(Sym),
 
-    // A
-    RecordNameExpression(RecordName),
-
     // a = b
     AssignmentExpression(@Exp, @Exp),
 

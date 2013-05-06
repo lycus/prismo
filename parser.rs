@@ -113,12 +113,9 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
     }
 }
 
-fn parse_record_name(state: @mut ParserState) -> ast::Exp {
+fn parse_record_name(state: @mut ParserState) -> (ast::RecordName, uint) {
     let token = state.expect(lexer::RECORD_NAME);
-    ast::Exp {
-        exp: ast::RecordNameExpression(ast::RecordName(@ast::DottedName(@[]), token.value)),
-        lineno: token.lineno
-    }
+    (ast::RecordName(@ast::DottedName(@[]), token.value), token.lineno)
 }
 
 fn parse_record_body(state: @mut ParserState) -> @[ast::Sym] {
@@ -145,10 +142,7 @@ fn parse_record_body(state: @mut ParserState) -> @[ast::Sym] {
 fn parse_record_declaration(state: @mut ParserState) -> ast::RecordDeclaration {
     let first = state.expect(lexer::RECORD);
 
-    let record_name = match parse_record_name(state) {
-        ast::Exp { exp: ast::RecordNameExpression(name), lineno: _ } => name,
-        _ => state.fail(~"irrefutable pattern match refuted?!")
-    };
+    let (name, _) = parse_record_name(state);
 
     let mut slots = @[];
 
@@ -161,17 +155,14 @@ fn parse_record_declaration(state: @mut ParserState) -> ast::RecordDeclaration {
     }
 
     ast::RecordDeclaration {
-        name: record_name,
+        name: name,
         slots: slots,
         lineno: first.lineno
     }
 }
 
 fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
-    let record_name = match parse_record_name(state) {
-        ast::Exp { exp: ast::RecordNameExpression(name), lineno: _ } => name,
-        _ => state.fail(~"irrefutable pattern match refuted?!")
-    };
+    let (name, _) = parse_record_name(state);
 
     let mut patterns = @[];
 
@@ -183,7 +174,7 @@ fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
         state.expect(lexer::RPAREN);
     }
 
-    ast::RecordPattern(record_name, patterns)
+    ast::RecordPattern(name, patterns)
 }
 
 fn parse_dotted_pattern(state: @mut ParserState) -> ast::LetPat {
@@ -232,8 +223,23 @@ fn parse_literal_pattern(state: @mut ParserState) -> ast::Pat {
 }
 
 fn parse_symbol_pattern(state: @mut ParserState) -> ast::Pat {
-    let (sym, _) = parse_symbol(state);
-    ast::SymbolPattern(sym)
+    match state.peek().type_ {
+        lexer::SYMBOL => {
+            let (sym, _) = parse_symbol(state);
+            ast::SymbolPattern(sym)
+        },
+
+        lexer::RECORD_NAME => {
+            let (ast::RecordName(_, sym), _) = parse_record_name(state);
+            ast::SymbolPattern(ast::Sym(sym))
+        },
+
+        _ => {
+            state.expect_any(~[lexer::SYMBOL,
+                               lexer::RECORD_NAME]);
+            state.fail(~"unreachable code reached?!");
+        }
+    }
 }
 
 fn parse_unit_pattern(state: @mut ParserState) -> ast::Pat {
@@ -447,8 +453,8 @@ fn parse_primary(state: @mut ParserState) -> ast::Exp {
         },
         lexer::LBRACK       => parse_list(state),
         lexer::LBRACE       => parse_block(state),
-        lexer::SYMBOL       => parse_symbol_expression(state),
-        lexer::RECORD_NAME  => parse_record_name(state),
+        lexer::SYMBOL       |
+        lexer::RECORD_NAME  => parse_symbol_expression(state),
         lexer::STRING_LITERAL   |
         lexer::BYTES_LITERAL    |
         lexer::INTEGER_LITERAL  |
