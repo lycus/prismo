@@ -4,8 +4,25 @@ pub struct Sym(@str);
 #[deriving(Eq)]
 pub struct RecordName(@DottedName, @str);
 
+impl to_str::ToStr for RecordName {
+    fn to_str(&self) -> ~str {
+        match *self {
+            RecordName(@DottedName([]), sym) => sym.to_str(),
+            RecordName(dn, sym) => fmt!("%s.%s", dn.to_str(), sym.to_str())
+        }
+    }
+}
+
 #[deriving(Eq)]
 pub struct DottedName(@[Sym]);
+
+impl to_str::ToStr for DottedName {
+    fn to_str(&self) -> ~str {
+        match *self {
+            DottedName(syms) => str::connect(syms.map(|sym| sym.to_str()), ~".")
+        }
+    }
+}
 
 #[deriving(Eq)]
 pub enum Lit {
