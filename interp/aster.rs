@@ -179,45 +179,43 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
             unify_pattern_basic(interp, env, pat1, val) && unify_pattern_basic(interp, env, pat2, val)
         },
         ast::RecordPattern(pat_decl, pats) => fail!(~":V"),
-        ast::ListPattern(pats) => {
-            match *val {
-                types::List(vals) => {
-                    if vals.len() < pats.len() {
-                        false
-                    } else {
-                        match pats[pats.len() - 1] {
-                            ast::ManyPattern => {
-                                // pattern match with a spread argument
+        ast::ListPattern(pats) => match *val {
+            types::List(vals) => {
+                if vals.len() < pats.len() {
+                    false
+                } else {
+                    match pats[pats.len() - 1] {
+                        ast::ManyPattern => {
+                            // pattern match with a spread argument
+                            let mut ok = true;
+                            let mut i = 0;
+                            while i < pats.len() - 1 {
+                                ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
+                                if !ok { break; };
+                                i += 1;
+                            }
+                            ok
+                        },
+                        _ => {
+                            if vals.len() > pats.len() {
+                                // no spread argument, :(
+                                false
+                            } else {
+                                // pattern match with a full pattern list
                                 let mut ok = true;
                                 let mut i = 0;
-                                while i < pats.len() - 1 {
+                                while i < pats.len() {
                                     ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
                                     if !ok { break; };
                                     i += 1;
                                 }
                                 ok
-                            },
-                            _ => {
-                                if vals.len() > pats.len() {
-                                    // no spread argument, :(
-                                    false
-                                } else {
-                                    // pattern match with a full pattern list
-                                    let mut ok = true;
-                                    let mut i = 0;
-                                    while i < pats.len() {
-                                        ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
-                                        if !ok { break; };
-                                        i += 1;
-                                    }
-                                    ok
-                                }
                             }
                         }
                     }
-                },
-                _ => false
-            }
+                }
+            },
+            _ => false
         }
     }
 }
