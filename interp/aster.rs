@@ -308,13 +308,14 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
             option::None => unwind(interp),
             option::Some(f) => {
                 let mut current_frame = frame;
-                let mut buf = ~[fmt!("Uncaught exception: %?", f)];
+                let mut buf = ~[fmt!("%?", f)];
                 loop {
                     buf += [fmt!("        from %s:%u", frame.file, frame.lineno)];
                     if current_frame.parent.is_none() { break; }
                     current_frame = current_frame.parent.unwrap();
                 }
                 io::println(str::connect(buf, "\n"));
+                fail!(~"uncaught aster exception");
             }
         }
     }
