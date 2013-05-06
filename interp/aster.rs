@@ -8,6 +8,8 @@ use interp::types;
 use core::hashmap::linear;
 use core::to_bytes;
 
+use std::sort;
+
 /*
  * aster - AST EvaulatoR
  *
@@ -269,13 +271,18 @@ fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast:
 fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> @mut types::Val<Interp> {
     let frame = interp.current_frame.unwrap();
 
+    // check for a frame exception
+    if frame.exception.is_some() {
+        return @mut types::Unit;
+    }
+
     let r = match exp.exp {
         ast::UnitExpression => @mut types::Unit,
         ast::LiteralExpression(l) => @mut types::gen_lit(l),
         ast::LambdaExpression(pat, exp) => @mut types::Function(@[types::Fun {
             pattern: pat,
             body: exp,
-            env: env::augment(env)
+            env: env
         }]),
         ast::ListExpression(exps) => {
             let mut vals = @[];
@@ -424,7 +431,58 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                 }
             }
             r
-        }
+        },
+        ast::CallExpression(f, args) => {
+            let f_e = eval_exp(interp, env, f);
+
+            if frame.exception.is_some() {
+                return @mut types::Unit;
+            }
+
+            let mut raw_vals = @[];
+            for args.each |arg| {
+                raw_vals += [eval_exp(interp, env, arg)];
+                if frame.exception.is_some() {
+                    return @mut types::Unit;
+                }
+            }
+
+            let vals = @mut types::List(raw_vals);
+
+            match *f_e {
+                types::Function(funs) => {
+                    let funs = sort::merge_sort(funs, |lhs, rhs| -ast::ListPattern((*lhs).pattern).specificity() < -ast::ListPattern((*rhs).pattern).specificity());
+
+                    for funs.each |fun| {
+                        let pat = ast::ListPattern(fun.pattern);
+                        let child_env = @mut env::Env::new();
+                        if unify_pattern_basic(interp, child_env, &pat, vals) {
+                            // wind a new frame
+                            let mut frame = wind(interp, env, fun.body.lineno);
+
+                            child_env.parent = @option::Some(fun.env);
+                            let r = eval_exp(interp, child_env, fun.body);
+
+                            if frame.exception.is_some() {
+                                return @mut types::Unit;
+                            } else {
+                                // unwind the frame if we don't have an exception.
+                                unwind(interp)
+                            }
+
+                            return r;
+                        }
+                    }
+
+                    frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
+                },
+                _ => {
+                    frame.exception = @mut option::Some(@mut types::String(@"left-hand side is not callable"));
+                }
+            }
+
+            @mut types::Unit
+        },
         _ => fail!(~"not implemented: full expression evaluation")
     };
 
@@ -465,22 +523,24 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
         env::declare(interp.root, &ast::Sym(r), @mut if rec.slots.len() == 0 {
             types::Record(@*rec, @[])
         } else {
-            types::RecordConstructor(@*rec)
+            types::Constructor(@*rec)
         });
     }
 
     for prog.body.each |stmt| {
-        let mut frame = wind(interp, interp.root, stmt.lineno);
+        wind(interp, interp.root, stmt.lineno);
 
         exec_stmt(interp, interp.root, stmt);
+
+        let frame = interp.current_frame.unwrap();
 
         match *frame.exception {
             option::None => unwind(interp),
             option::Some(f) => {
                 let mut current_frame = frame;
-                let mut buf = ~[fmt!("%?", f)];
+                let mut buf = ~[types::repr(f)];
                 loop {
-                    buf += [fmt!("        from %s:%u", frame.file, frame.lineno)];
+                    buf += [fmt!("        from %s:%u", current_frame.file, current_frame.lineno)];
                     if current_frame.parent.is_none() { break; }
                     current_frame = current_frame.parent.unwrap();
                 }

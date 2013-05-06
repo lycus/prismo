@@ -14,9 +14,6 @@ pub enum Val<Interp> {
     // (),
     Unit,
 
-    // a
-    Symbol(@ast::Sym),
-
     // 1
     Integer(int),
 
@@ -39,7 +36,7 @@ pub enum Val<Interp> {
     Record(@ast::RecordDeclaration, @[@mut Val<Interp>]),
 
     // <record constructor>
-    RecordConstructor(@ast::RecordDeclaration),
+    Constructor(@ast::RecordDeclaration),
 
     // f(a, b, ...) = ...
     Function(@[Fun<Interp>]),
@@ -52,6 +49,24 @@ pub enum Val<Interp> {
 
     // <handle>
     Handle(c_void),
+}
+
+pub fn repr<Interp>(v: @mut Val<Interp>) -> ~str {
+    match v {
+        @Unit               => ~"()",
+        @Integer(i)         => fmt!("%d", i),
+        @Floating(i)        => fmt!("%f", i),
+        @Bytes(s)           => fmt!("%?", s),
+        @String(s)          => fmt!("%?", s),
+        @Boolean(b)         => if b { ~"True" } else { ~"False" },
+        @List(xs)           => fmt!("[%s]", str::connect(xs.map(|x| repr(*x)), ", ")),
+        @Record(decl, vs)   => fmt!("%?(%s)", decl.name, str::connect(vs.map(|x| repr(*x)), ", ")),
+        @Constructor(decl)  => fmt!("%?", decl.name),
+        @Function(_)        => ~"<function>",
+        @Module(_)          => ~"<module>",
+        @Routine(_)         => ~"<routine>",
+        @Handle(_)          => fmt!("<handle>")
+    }
 }
 
 impl <Interp> Eq for Val<Interp> {
