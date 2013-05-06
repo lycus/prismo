@@ -34,6 +34,7 @@ fn print_help(program: &str) {
     io::println("");
     io::println("   -t, --tokens   Dump token stream.");
     io::println("   -a, --ast      Dump AST.");
+    io::println("   -e, --env      Dump root environment at the end of execution.");
     io::println("   -h, --help     Print this message.");
 }
 
@@ -62,6 +63,7 @@ fn main() {
     let opts = ~[
         getopts::optflag("t"), getopts::optflag("tokens"),
         getopts::optflag("a"), getopts::optflag("ast"),
+        getopts::optflag("e"), getopts::optflag("env"),
         getopts::optflag("h"), getopts::optflag("help")
     ];
 
@@ -105,4 +107,12 @@ fn main() {
         arg.to_managed()
     }), filename);
     interp::aster::run(interp, program);
+
+    if getopts::opt_present(&matches, "e") || getopts::opt_present(&matches, "env") {
+        io::println("ENV");
+        for interp.root.vars.each_key |k| {
+            io::println(fmt!("%s: %?", **k, *interp.root.vars.find(k).unwrap()));
+        }
+        io::println("ENV OF ENV");
+    }
 }

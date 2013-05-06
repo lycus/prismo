@@ -37,7 +37,7 @@ impl to_bytes::IterBytes for ast::DottedName {
 pub struct Interp {
     record_types: @mut linear::LinearMap<@(ast::DottedName, ast::RecordName), @ast::RecordDeclaration>,
     import_paths: @[Path],
-    root: @env::Env<Interp>,
+    root: @mut env::Env<Interp>,
     argv: @[@str],
     filename: @str,
     current_frame: @option::Option<@mut Frame>
@@ -48,7 +48,7 @@ pub impl Interp {
         Interp {
             record_types: @mut linear::LinearMap::new(),
             import_paths: import_paths,
-            root: @env::Env::new(),
+            root: @mut env::Env::new(),
             argv: argv,
             filename: filename,
             current_frame: @option::None
@@ -65,10 +65,10 @@ pub struct Frame {
 }
 
 pub impl Frame {
-    pub fn new(interp: @mut Interp, file: @str, lineno: uint) -> Frame {
+    pub fn new(interp: @mut Interp, env: @mut env::Env<Interp>, file: @str, lineno: uint) -> Frame {
         Frame {
             parent: interp.current_frame,
-            env: @mut env::Env::new(),
+            env: env,
             file: file,
             lineno: lineno,
             exception: @option::None
@@ -126,17 +126,17 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     };
 }
 
-fn unify_pattern_basic(interp: @mut Interp, pat: &ast::Pat, val: @types::Val<Interp>) -> () {
+fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @types::Val<Interp>) -> () {
     match *pat {
         ast::AnyPattern => (),
-        ast::SymbolPattern(sym) => { interp.current_frame.unwrap().env.vars.insert(sym, val); },
+        ast::SymbolPattern(sym) => { env.vars.insert(sym, val); },
         _ => fail!(~":V")
     };
 }
 
-fn unify_pattern_let(interp: @mut Interp, pat: &ast::LetPat, val: @types::Val<Interp>) -> () {
+fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::LetPat, val: @types::Val<Interp>) -> () {
     match *pat {
-        ast::BasicPattern(pat) => unify_pattern_basic(interp, &pat, val),
+        ast::BasicPattern(pat) => unify_pattern_basic(interp, env, &pat, val),
         _ => fail!(~":V")
     };
 }
@@ -202,9 +202,9 @@ fn unescape_str(inp: &str) -> ~str {
     str::from_chars(out)
 }
 
-fn eval_exp(interp: @mut Interp, exp: &ast::Exp) -> types::Val<Interp> {
+fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> types::Val<Interp> {
     // allocate a new frame
-    let frame = @mut Frame::new(interp, interp.filename, exp.lineno);
+    let frame = @mut Frame::new(interp, env, interp.filename, exp.lineno);
     interp.current_frame = @option::Some(frame);
 
     let r = match exp.exp {
@@ -229,14 +229,14 @@ fn eval_exp(interp: @mut Interp, exp: &ast::Exp) -> types::Val<Interp> {
     r
 }
 
-fn exec_stmt(interp: @mut Interp, stmt: &ast::Stmt) -> () {
+fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) -> () {
     // allocate a new frame
-    let frame = @mut Frame::new(interp, interp.filename, stmt.lineno);
+    let frame = @mut Frame::new(interp, env, interp.filename, stmt.lineno);
     interp.current_frame = @option::Some(frame);
 
     match stmt.stmt {
-        ast::LetBindingStatement(pat, exp) => unify_pattern_let(interp, &pat, @eval_exp(interp, &exp)),
-        ast::ExpressionStatement(exp) => { eval_exp(interp, &exp); }
+        ast::LetBindingStatement(pat, exp) => unify_pattern_let(interp, env, &pat, @eval_exp(interp, env, &exp)),
+        ast::ExpressionStatement(exp) => { eval_exp(interp, env, &exp); }
     };
     interp.current_frame = match *interp.current_frame {
         option::None => @option::None,
@@ -265,6 +265,6 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
     }
 
     for prog.body.each |stmt| {
-        exec_stmt(interp, stmt);
+        exec_stmt(interp, interp.root, stmt);
     }
 }
