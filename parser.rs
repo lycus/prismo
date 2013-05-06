@@ -116,7 +116,7 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
 fn parse_record_name(state: @mut ParserState) -> ast::Exp {
     let token = state.expect(lexer::RECORD_NAME);
     ast::Exp {
-        exp: ast::RecordNameExpression(ast::RecordName(token.value)),
+        exp: ast::RecordNameExpression(ast::RecordName(@ast::DottedName(@[]), token.value)),
         lineno: token.lineno
     }
 }

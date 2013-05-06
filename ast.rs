@@ -2,7 +2,7 @@
 pub struct Sym(@str);
 
 #[deriving(Eq)]
-pub struct RecordName(@str);
+pub struct RecordName(@DottedName, @str);
 
 #[deriving(Eq)]
 pub struct DottedName(@[Sym]);

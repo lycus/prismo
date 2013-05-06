@@ -20,7 +20,7 @@ use core::to_bytes;
 impl to_bytes::IterBytes for ast::RecordName {
     fn iter_bytes(&self, lsb0: bool, f: to_bytes::Cb) {
         match self {
-            &ast::RecordName(s) => s.iter_bytes(lsb0, f)
+            &ast::RecordName(n, s) => (n, s).iter_bytes(lsb0, f)
         }
     }
 }
@@ -35,7 +35,7 @@ impl to_bytes::IterBytes for ast::DottedName {
 }
 
 pub struct Interp {
-    record_types: @mut linear::LinearMap<@(ast::DottedName, ast::RecordName), @ast::RecordDeclaration>,
+    record_types: @mut linear::LinearMap<@ast::RecordName, @ast::RecordDeclaration>,
     import_paths: @[Path],
     root: @mut env::Env<Interp>,
     argv: @[@str],
@@ -119,13 +119,26 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
             run_file(interp1, &path);
 
             if qualified {
+                let module_name = ast::Sym(module_name.to_managed());
+
                 // qualified imports symbols from child interpreter into a module
-                env::declare(interp.root, &ast::Sym(module_name.to_managed()),
+                env::declare(interp.root, &module_name,
                              @mut types::Module(interp1.root.vars));
+
+                for interp1.record_types.each_key |k| {
+                    interp.record_types.insert(match *k {
+                        @ast::RecordName(modu, name) => @ast::RecordName(@ast::DottedName(**modu + [module_name]), name)
+                    }, *interp1.record_types.find(k).unwrap());
+                }
             } else {
                 // otherwise we just plop all the symbols in
                 for interp1.root.vars.each_key |k| {
                     env::declare(interp.root, k, *interp1.root.vars.find(k).unwrap());
+                }
+
+                // import record types
+                for interp1.record_types.each_key |k| {
+                    interp.record_types.insert(*k, *interp1.record_types.find(k).unwrap());
                 }
             }
 
@@ -351,7 +364,7 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
     }
 
     for prog.records.each |rec| {
-        interp.record_types.insert(@(ast::DottedName(@[]), rec.name), @*rec);
+        interp.record_types.insert(@rec.name, @*rec);
     }
 
     for prog.body.each |stmt| {
