@@ -154,8 +154,7 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
 
 fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
     // perform pattern matching of basic patterns -- if a match fails, we leave all the symbols in
-    // scope and not care, because we unwind the stack during an exception and we won't be able to
-    // get the environment back.
+    // scope and not care. this is pretty bad.
     match *pat {
         ast::AnyPattern => true,
         ast::ManyPattern => false,
