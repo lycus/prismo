@@ -650,7 +650,7 @@ fn parse_postfix_expression(state: @mut ParserState) -> ast::Exp {
                 let (sym, _) = parse_symbol_or_record_name(state);
 
                 lhs = ast::Exp {
-                    exp: ast::RecordFunctionBindExpression(@lhs, sym),
+                    exp: ast::FunctionBindExpression(@lhs, sym),
                     lineno: token.lineno
                 };
             },

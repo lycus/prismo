@@ -112,7 +112,7 @@ pub enum BareExp {
     AccessExpression(@Exp, Sym),
 
     // a:b
-    RecordFunctionBindExpression(@Exp, Sym),
+    FunctionBindExpression(@Exp, Sym),
 
     // a
     SymbolExpression(Sym),

@@ -302,10 +302,36 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                         @mut types::Unit
                     }
                 },
-
-                _ => fail!(~"not implemented: non-module access")
+                types::Record(decl, vars) => fail!(~"not implemented: record access"),
+                _ => {
+                    frame.exception = @mut option::Some(@mut types::String(fmt!("cannot acccess `%s` of non-record/module", *sym).to_managed()));
+                    @mut types::Unit
+                }
             }
-        }
+        },
+        ast::BlockExpression(stmts, trailing_semicolon) => {
+            let mut body = stmts.slice(0, stmts.len());
+
+            if !trailing_semicolon {
+                body = stmts.slice(0, stmts.len() - 1);
+            }
+
+            for body.each |stmt| {
+                exec_stmt(interp, env, stmt)
+            }
+
+            if !trailing_semicolon {
+                match stmts[stmts.len() - 1].stmt {
+                    ast::ExpressionStatement(exp) => eval_exp(interp, env, &exp),
+                    _ => {
+                        frame.exception = @mut option::Some(@mut types::String(@"last statement of block is not an expression"));
+                        @mut types::Unit
+                    }
+                }
+            } else {
+                @mut types::Unit
+            }
+        },
         _ => fail!(~"not implemented: full expression evaluation")
     };
 
