@@ -39,27 +39,41 @@ pub struct Interp {
     import_paths: @[Path],
     root: @env::Env<Interp>,
     argv: @[@str],
-    current_frame: @option::Option<Frame>
+    filename: @str,
+    current_frame: @option::Option<@mut Frame>
 }
 
 pub impl Interp {
-    pub fn new(import_paths: @[Path], argv: @[@str]) -> Interp {
+    pub fn new(import_paths: @[Path], argv: @[@str], filename: @str) -> Interp {
         Interp {
             record_types: @mut linear::LinearMap::new(),
             import_paths: import_paths,
             root: @env::Env::new(),
             argv: argv,
+            filename: filename,
             current_frame: @option::None
         }
     }
 }
 
 pub struct Frame {
-    parent: @option::Option<Frame>,
+    parent: @option::Option<@mut Frame>,
     env: @mut env::Env<Interp>,
     file: @str,
     lineno: uint,
     exception: @option::Option<types::Val<Interp>>
+}
+
+pub impl Frame {
+    pub fn new(interp: @mut Interp, file: @str, lineno: uint) -> Frame {
+        Frame {
+            parent: interp.current_frame,
+            env: @mut env::Env::new(),
+            file: file,
+            lineno: lineno,
+            exception: @option::None
+        }
+    }
 }
 
 pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: bool) -> () {
@@ -67,7 +81,8 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     let mut parts = copy module_parts;
 
     vec::reverse(parts);
-    let filename = fmt!("%s.pr", *vec::head(parts));
+    let module_name = copy parts[0];
+    let filename = fmt!("%s.pr", module_name);
     parts = vec::tail(parts).to_owned();
     vec::reverse(parts);
 
@@ -75,20 +90,30 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     let mut paths = interp.import_paths.to_owned();
 
     for paths.each_mut |import_path| {
+        // make a path inside the import path and check if that exists
         let base_path = (copy *import_path).push_many(parts);
         let path = base_path.push(filename);
 
         if os::path_exists(&path) {
+            // make a copy of the import paths then give them to a new sub-interpreter
             let mut import_paths1 = interp.import_paths.to_owned();
             import_paths1.unshift(base_path);
 
-            let interp1 = @mut Interp::new(at_vec::from_owned(import_paths1), interp.argv);
+            let interp1 = @mut Interp::new(at_vec::from_owned(import_paths1), interp.argv, path.to_str().to_managed());
 
+            // run the file in the sub-interpreter
             run_file(interp1, &path);
 
-            // qualified imports symbols from child interpreter
             if qualified {
-                interp.root.vars.insert(ast::Sym(@"TODO"), @types::Module(interp1.root.vars));
+                // qualified imports symbols from child interpreter into a module
+                interp.root.vars.insert(ast::Sym(module_name.to_managed()),
+                                        @types::Module(interp1.root.vars));
+            } else {
+                // otherwise we just plop all the symbols in
+                for interp1.root.vars.each_key |k| {
+                    interp.root.vars.insert(*k,
+                                            *interp1.root.vars.find(k).unwrap());
+                }
             }
 
             found = true;
@@ -98,6 +123,124 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
 
     if !found {
         fail!(fmt!("couldn't import module %s", str::connect(module_parts, ".")))
+    };
+}
+
+fn unify_pattern_basic(interp: @mut Interp, pat: &ast::Pat, val: @types::Val<Interp>) -> () {
+    match *pat {
+        ast::AnyPattern => (),
+        ast::SymbolPattern(sym) => { interp.current_frame.unwrap().env.vars.insert(sym, val); },
+        _ => fail!(~":V")
+    };
+}
+
+fn unify_pattern_let(interp: @mut Interp, pat: &ast::LetPat, val: @types::Val<Interp>) -> () {
+    match *pat {
+        ast::BasicPattern(pat) => unify_pattern_basic(interp, &pat, val),
+        _ => fail!(~":V")
+    };
+}
+
+fn unescape_str(inp: &str) -> ~str {
+    let mut out = ~[];
+    let mut i = 1;
+    let mut slice = inp.slice(1, inp.len() - 1);
+
+    while slice.len() > 0 {
+        out += ~[if slice.char_at(0) == '\\' {
+            match slice.char_at(1) {
+                '"' => {
+                    i += 1;
+                    '"'
+                },
+                '\'' => {
+                    i += 1;
+                    '\''
+                },
+                '\\' => {
+                    i += 1;
+                    '\\'
+                },
+                'n' => {
+                    i += 1;
+                    '\n'
+                },
+                'r' => {
+                    i += 1;
+                    '\r'
+                },
+                't' => {
+                    i += 1;
+                    '\t'
+                },
+                'x' => {
+                    if slice.len() >= 4 {
+                        i += 3;
+                        int::from_str_radix(slice.slice(2, 4), 16).unwrap() as char
+                    } else {
+                        'x'
+                    }
+                },
+                'u' => {
+                    if slice.len() >= 6 {
+                        i += 5;
+                        int::from_str_radix(slice.slice(2, 6), 16).unwrap() as char
+                    } else {
+                        'u'
+                    }
+                },
+                _ => '\\'
+            }
+        } else {
+            slice.char_at(0)
+        }];
+        i += 1;
+
+        slice = inp.slice(i, inp.len() - 1);
+    }
+
+    str::from_chars(out)
+}
+
+fn eval_exp(interp: @mut Interp, exp: &ast::Exp) -> types::Val<Interp> {
+    // allocate a new frame
+    let frame = @mut Frame::new(interp, interp.filename, exp.lineno);
+    interp.current_frame = @option::Some(frame);
+
+    let r = match exp.exp {
+        ast::UnitExpression => types::Unit,
+        ast::LiteralExpression(l) => {
+            match l {
+                ast::IntegerLiteral(i) => types::Integer(int::from_str(i).unwrap()),
+                ast::FloatingLiteral(i) => types::Floating(float::from_str(i).unwrap()),
+                ast::StringLiteral(s) => types::String(unescape_str(s).to_managed()),
+                ast::BytesLiteral(s) => types::Bytes(at_vec::from_owned(unescape_str(s).to_bytes()))
+            }
+        },
+        ast::LambdaExpression(pat, exp) => types::Function(@[types::Fun { pattern: pat, body: exp }]),
+        _ => fail!(~":V")
+    };
+
+    interp.current_frame = match *interp.current_frame {
+        option::None => @option::None,
+        option::Some(frame) => frame.parent
+    };
+
+    r
+}
+
+fn exec_stmt(interp: @mut Interp, stmt: &ast::Stmt) -> () {
+    // allocate a new frame
+    let frame = @mut Frame::new(interp, interp.filename, stmt.lineno);
+    interp.current_frame = @option::Some(frame);
+
+    match stmt.stmt {
+        ast::LetBindingStatement(pat, exp) => unify_pattern_let(interp, &pat, @eval_exp(interp, &exp)),
+        ast::ExpressionStatement(exp) => { eval_exp(interp, &exp); }
+    };
+    interp.current_frame = match *interp.current_frame {
+        option::None => @option::None,
+        option::Some(frame) => frame.parent
     };
 }
 
@@ -119,5 +262,9 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
 
     for prog.records.each |rec| {
         interp.record_types.insert(@(ast::DottedName(@[]), rec.name), @*rec);
+    }
+
+    for prog.body.each |stmt| {
+        exec_stmt(interp, stmt);
     }
 }

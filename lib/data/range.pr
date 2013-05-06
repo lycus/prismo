@@ -4,8 +4,8 @@ import qualified data.iter;
 record Range(start, stop);
 record RangeIterator(range, i);
 
-let data.iter.iter(Range(start, _) as r) = RangeIterator(r, start);
-let data.iter.next(RangeIterator(r, i) as it) = {
+let iter.iter(Range(start, _) as r) = RangeIterator(r, start);
+let iter.next(RangeIterator(r, i) as it) = {
     if it.i >= r.stop then () else {
         it.i = it.i + 1;
         Some(i)

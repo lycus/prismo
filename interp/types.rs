@@ -5,7 +5,7 @@ use ast;
 use interp::env;
 
 pub struct Fun {
-    pattern: @[@ast::Pat],
+    pattern: @[ast::Pat],
     body: @ast::Exp
 }
 
@@ -23,16 +23,16 @@ pub enum Val<Interp> {
     Floating(float),
 
     // 'hello!'
-    Bytes(@[char]),
+    Bytes(@[u8]),
 
     // "hello!"
-    String(~str),
+    String(@str),
 
     // A(a, b, c, ...)
     Record(@ast::RecordDeclaration, @[@Val<Interp>]),
 
     // f(a, b, ...) = ...
-    Function(@[@Fun]),
+    Function(@[Fun]),
 
     // a.{...}
     Module(@mut linear::LinearMap<ast::Sym, @Val<Interp>>),

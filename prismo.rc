@@ -78,13 +78,13 @@ fn main() {
         return;
     }
 
-    let (import_paths, r) = if filename == ~"-" {
-        (@[os::getcwd()], io::stdin())
+    let (filename, import_paths, r) = if filename == ~"-" {
+        (@"<stdin>", @[os::getcwd()], io::stdin())
     } else {
         let path = os::make_absolute(&path::Path(filename));
 
         match io::file_reader(&path) {
-            result::Ok(r) => (@[path.dir_path()], r),
+            result::Ok(r) => (path.to_str().to_managed(), @[path.dir_path()], r),
             result::Err(f) => fail!(f)
         }
     };
@@ -103,6 +103,6 @@ fn main() {
 
     let interp = @mut interp::aster::Interp::new(import_paths, at_vec::from_slice(do argv.map |arg| {
         arg.to_managed()
-    }));
+    }), filename);
     interp::aster::run(interp, program);
 }
