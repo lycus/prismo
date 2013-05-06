@@ -163,7 +163,7 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
             types::Unit => true,
             _ => false
         },
-        ast::LiteralPattern(lit) => *val == types::gen_lit(lit),
+        ast::LiteralPattern(lit) => *val == types:: gen_lit(lit),
         ast::SymbolPattern(sym) => {
             env::declare(env, &sym, val);
             true
@@ -241,7 +241,18 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
             body: exp,
             env: env
         }]),
-        ast::ListExpression(exps) => types::List(at_vec::map(exps, |exp| @mut eval_exp(interp, env, exp))),
+        ast::ListExpression(exps) => {
+            let mut vals = @[];
+
+            for exps.each |exp| {
+                vals += [@mut eval_exp(interp, env, exp)];
+                if !frame.exception.is_none() {
+                    return types::Unit;
+                }
+            }
+
+            types::List(vals)
+        },
         ast::SymbolExpression(sym) => {
             match env::find(env, &sym) {
                 option::Some(x) => types::Unit,
