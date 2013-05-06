@@ -58,6 +58,23 @@ pub enum Pat {
     UnitPattern
 }
 
+pub impl Pat {
+    fn specificity(&self) -> uint {
+        match *self {
+            AnyPattern => 0,
+            ManyPattern => 0,
+            RecordPattern(_, pats) => pats.map(|pat| pat.specificity()).foldr(0, |x, acc| x + acc),
+            DisjunctivePattern(l, r) => uint::min(l.specificity(), r.specificity()),
+            ConjunctivePattern(l, r) => uint::max(l.specificity(), r.specificity()),
+            ListPattern(pats) => pats.map(|pat| pat.specificity()).foldr(0, |x, acc| x + acc),
+            BoundPattern(_, pat) => pat.specificity(),
+            LiteralPattern(_) => 1,
+            SymbolPattern(_) => 1,
+            UnitPattern => 1
+        }
+    }
+}
+
 pub struct Exp {
     exp: BareExp,
     lineno: uint
