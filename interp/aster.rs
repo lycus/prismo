@@ -318,6 +318,8 @@ fn gen_lit(l: ast::Lit) -> types::Val<Interp> {
 }
 
 fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> types::Val<Interp> {
+    let frame = interp.current_frame.unwrap();
+
     let r = match exp.exp {
         ast::UnitExpression => types::Unit,
         ast::LiteralExpression(l) => gen_lit(l),
@@ -327,6 +329,15 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
             env: env
         }]),
         ast::ListExpression(exps) => types::List(at_vec::map(exps, |exp| @mut eval_exp(interp, env, exp))),
+        ast::SymbolExpression(sym) => {
+            match env::find(env, &sym) {
+                option::Some(x) => types::Unit,
+                option::None => {
+                    frame.exception = @mut option::Some(@mut types::String(fmt!("symbol `%s` not found in scope", *sym).to_managed()));
+                    types::Unit
+                }
+            }
+        },
         _ => fail!(~":V")
     };
 
