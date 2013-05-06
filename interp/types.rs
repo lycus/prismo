@@ -4,9 +4,10 @@ use core::hashmap::linear;
 use ast;
 use interp::env;
 
-pub struct Fun {
+pub struct Fun<Interp> {
     pattern: @[ast::Pat],
-    body: @ast::Exp
+    body: @ast::Exp,
+    env: @mut env::Env<Interp>
 }
 
 pub enum Val<Interp> {
@@ -32,7 +33,7 @@ pub enum Val<Interp> {
     Record(@ast::RecordDeclaration, @[@Val<Interp>]),
 
     // f(a, b, ...) = ...
-    Function(@[Fun]),
+    Function(@[Fun<Interp>]),
 
     // a.{...}
     Module(@mut linear::LinearMap<ast::Sym, @Val<Interp>>),

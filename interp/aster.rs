@@ -217,7 +217,11 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                 ast::BytesLiteral(s) => types::Bytes(at_vec::from_owned(unescape_str(s).to_bytes()))
             }
         },
-        ast::LambdaExpression(pat, exp) => types::Function(@[types::Fun { pattern: pat, body: exp }]),
+        ast::LambdaExpression(pat, exp) => types::Function(@[types::Fun {
+            pattern: pat,
+            body: exp,
+            env: env
+        }]),
         _ => fail!(~":V")
     };
 
