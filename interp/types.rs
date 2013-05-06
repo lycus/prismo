@@ -35,6 +35,9 @@ pub enum Val<Interp> {
     // A(a, b, c, ...)
     Record(@ast::RecordDeclaration, @[@Val<Interp>]),
 
+    // <record constructor>
+    RecordConstructor(@ast::RecordDeclaration),
+
     // f(a, b, ...) = ...
     Function(@[Fun<Interp>]),
 
