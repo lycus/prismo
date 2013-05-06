@@ -307,7 +307,14 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
         match *frame.exception {
             option::None => unwind(interp),
             option::Some(f) => {
-                fail!(fmt!("%? in %s:%u", f, frame.file, frame.lineno))
+                let mut current_frame = frame;
+                let mut buf = ~[fmt!("Uncaught exception: %?", f)];
+                loop {
+                    buf += [fmt!("        from %s:%u", frame.file, frame.lineno)];
+                    if current_frame.parent.is_none() { break; }
+                    current_frame = current_frame.parent.unwrap();
+                }
+                io::println(str::connect(buf, "\n"));
             }
         }
     }
