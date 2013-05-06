@@ -106,13 +106,12 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
 
             if qualified {
                 // qualified imports symbols from child interpreter into a module
-                interp.root.vars.insert(ast::Sym(module_name.to_managed()),
-                                        @types::Module(interp1.root.vars));
+                env::declare(interp.root, &ast::Sym(module_name.to_managed()),
+                             @types::Module(interp1.root.vars));
             } else {
                 // otherwise we just plop all the symbols in
                 for interp1.root.vars.each_key |k| {
-                    interp.root.vars.insert(*k,
-                                            *interp1.root.vars.find(k).unwrap());
+                    env::declare(interp.root, k, *interp1.root.vars.find(k).unwrap());
                 }
             }
 
@@ -129,7 +128,7 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
 fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @types::Val<Interp>) -> () {
     match *pat {
         ast::AnyPattern => (),
-        ast::SymbolPattern(sym) => { env.vars.insert(sym, val); },
+        ast::SymbolPattern(sym) => { env::declare(env, &sym, val); },
         _ => fail!(~":V")
     };
 }
