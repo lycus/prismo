@@ -47,22 +47,22 @@ pub struct Interp {
 }
 
 pub impl Interp {
-    pub fn new(import_paths: @[Path], argv: @[@str], filename: @str) -> Interp {
+    pub fn new(import_paths: @[Path], argv: @[@str]) -> Interp {
         Interp {
             record_types: @mut linear::LinearMap::new(),
             import_paths: import_paths,
             root: @mut env::Env::new(),
             argv: argv,
-            filename: filename,
+            filename: @"?",
             loaded_files: @[],
             current_frame: @mut option::None
         }
     }
 }
 
-fn wind(interp: @mut Interp, env: @mut env::Env<Interp>, lineno: uint) -> @mut Frame {
+fn wind(interp: @mut Interp, env: @mut env::Env<Interp>, filename: @str, lineno: uint) -> @mut Frame {
     // allocate a new frame
-    let frame = @mut Frame::new(interp, env, interp.filename, lineno);
+    let frame = @mut Frame::new(interp, env, filename, lineno);
     interp.current_frame = @mut option::Some(frame);
     frame
 }
@@ -117,7 +117,7 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
             let mut import_paths1 = interp.import_paths.to_owned();
             import_paths1.unshift(base_path);
 
-            let interp1 = @mut Interp::new(at_vec::from_owned(import_paths1), interp.argv, path.to_str().to_managed());
+            let interp1 = @mut Interp::new(at_vec::from_owned(import_paths1), interp.argv);
 
             // run the file in the sub-interpreter
             run_file(interp1, &path);
@@ -211,6 +211,8 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
             types::List(vals) => {
                 if vals.len() < pats.len() {
                     false
+                } else if vals.len() == 0 {
+                    true
                 } else {
                     match pats[pats.len() - 1] {
                         ast::ManyPattern => {
@@ -282,7 +284,8 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
         ast::LambdaExpression(pat, exp) => @mut types::Function(@[types::Fun {
             pattern: pat,
             body: exp,
-            env: env
+            env: env,
+            filename: interp.filename
         }]),
         ast::ListExpression(exps) => {
             let mut vals = @[];
@@ -458,7 +461,7 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                         let child_env = @mut env::Env::new();
                         if unify_pattern_basic(interp, child_env, &pat, vals) {
                             // wind a new frame
-                            let mut frame = wind(interp, env, fun.body.lineno);
+                            let mut frame = wind(interp, env, fun.filename, fun.body.lineno);
 
                             child_env.parent = @option::Some(fun.env);
                             let r = eval_exp(interp, child_env, fun.body);
@@ -513,13 +516,15 @@ pub fn run_file(interp: @mut Interp, path: &Path) -> () {
         result::Ok(r) => {
             let tokens = lexer::lex(r);
             let program = parser::parse(tokens);
-            run(interp, program);
+            run(interp, path.to_str().to_managed(), program);
         },
         result::Err(f) => fail!(f)
     }
 }
 
-pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
+pub fn run(interp: @mut Interp, filename: @str, prog: ast::Program) -> () {
+    interp.filename = filename;
+
     for prog.imports.each |imp| {
         import_module(interp, &imp.module, imp.qualified);
     }
@@ -536,7 +541,7 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
     }
 
     for prog.body.each |stmt| {
-        wind(interp, interp.root, stmt.lineno);
+        wind(interp, interp.root, filename, stmt.lineno);
 
         exec_stmt(interp, interp.root, stmt);
 

@@ -7,7 +7,8 @@ use interp::env;
 pub struct Fun<Interp> {
     pattern: @[ast::Pat],
     body: @ast::Exp,
-    env: @mut env::Env<Interp>
+    env: @mut env::Env<Interp>,
+    filename: @str
 }
 
 pub enum Val<Interp> {
