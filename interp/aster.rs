@@ -272,7 +272,7 @@ fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) 
         ast::LetBindingStatement(pat, exp) => {
             if !unify_pattern_let(interp, env, &pat, @mut eval_exp(interp, env, &exp)) {
                 // uh oh, we need to throw an exception and unwind
-                frame.exception = @mut option::Some(@mut types::String(@"pattern match failed"));
+                frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
             }
         },
         ast::ExpressionStatement(exp) => { eval_exp(interp, env, &exp); }
