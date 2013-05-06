@@ -154,10 +154,7 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     };
 }
 
-fn unify_pattern_basic(interp: @mut Interp, in_env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
-    // allocate a temporary environment for pattern matching
-    let mut env = @mut env::Env::new();
-
+fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
     if match *pat {
         ast::AnyPattern => true,
         ast::ManyPattern => false,
@@ -247,16 +244,24 @@ fn unify_pattern_basic(interp: @mut Interp, in_env: @mut env::Env<Interp>, pat: 
             _ => false
         }
     } {
-        env::merge_into_shallow(in_env, env);
         true
     } else {
         false
     }
 }
 
-fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::LetPat, val: @mut types::Val<Interp>) -> bool {
+fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::LetPat, val: @mut types::Val<Interp>) -> () {
+    let frame = interp.current_frame.unwrap();
+
     match *pat {
-        ast::BasicPattern(pat) => unify_pattern_basic(interp, env, &pat, val),
+        ast::BasicPattern(pat) => {
+            let in_env = @mut env::Env::new();
+            if unify_pattern_basic(interp, in_env, &pat, val) {
+                env::merge_into_shallow(env, in_env);
+            } else {
+                frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
+            }
+        },
         _ => fail!(~"not implemented: full let-pattern unify")
     }
 }
@@ -270,7 +275,7 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
         ast::LambdaExpression(pat, exp) => @mut types::Function(@[types::Fun {
             pattern: pat,
             body: exp,
-            env: env
+            env: env::augment(env)
         }]),
         ast::ListExpression(exps) => {
             let mut vals = @[];
@@ -354,25 +359,86 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                 @mut types::Unit
             }
         },
+        ast::IfThenElseExpression(pred, conseq, option_alt) => {
+            let pred_e = eval_exp(interp, env, pred);
+            if frame.exception.is_some() {
+                return @mut types::Unit;
+            }
+
+            match *pred_e {
+                types::Boolean(p) => {
+                    if p {
+                        eval_exp(interp, env, conseq)
+                    } else {
+                        match option_alt {
+                            option::Some(alt) => eval_exp(interp, env, alt),
+                            _ => @mut types::Unit
+                        }
+                    }
+                },
+
+                _ => {
+                    frame.exception = @mut option::Some(@mut types::String(@"expression does not yield a boolean"));
+                    @mut types::Unit
+                }
+            }
+        },
+        ast::WhileDoExpression(pred, body) => {
+            loop {
+                let pred_e = eval_exp(interp, env, pred);
+                if frame.exception.is_some() {
+                    return @mut types::Unit;
+                }
+
+                match *pred_e {
+                    types::Boolean(p) => {
+                        if (!p) { break; }
+                        eval_exp(interp, env, body);
+                        if frame.exception.is_some() {
+                            return @mut types::Unit;
+                        }
+                    },
+
+                    _ => {
+                        frame.exception = @mut option::Some(@mut types::String(@"expression does not yield a boolean"));
+                    }
+                }
+            }
+
+            @mut types::Unit
+        },
+        ast::MatchWithExpression(exp, cases) => {
+            let mut r = @mut types::Unit;
+            let v = eval_exp(interp, env, exp);
+
+            if frame.exception.is_some() {
+                return @mut types::Unit;
+            }
+            for cases.each |&(pat, body)| {
+                let in_env = @mut env::Env::new();
+
+                if unify_pattern_basic(interp, in_env, &pat, v) {
+                    env::merge_into_shallow(env, in_env);
+                    r = eval_exp(interp, env, &body);
+                    break;
+                }
+            }
+            r
+        }
         _ => fail!(~"not implemented: full expression evaluation")
     };
 
-    r
+    // if we ended up with a routine, run the routine
+    match r {
+        @types::Routine(f) => f(interp, env),
+        _ => r
+    }
 }
 
 fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) -> () {
-    let frame = interp.current_frame.unwrap();
-
     match stmt.stmt {
-        ast::LetBindingStatement(pat, exp) => {
-            if !unify_pattern_let(interp, env, &pat, eval_exp(interp, env, &exp)) {
-                // uh oh, we need to throw an exception and unwind
-                frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
-            }
-        },
-        ast::ExpressionStatement(exp) => {
-            eval_exp(interp, env, &exp);
-        }
+        ast::LetBindingStatement(pat, exp) => unify_pattern_let(interp, env, &pat, eval_exp(interp, env, &exp)),
+        ast::ExpressionStatement(exp) => { eval_exp(interp, env, &exp); }
     };
 }
 

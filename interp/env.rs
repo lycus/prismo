@@ -55,3 +55,10 @@ pub fn merge_into_shallow<Interp>(env: @mut Env<Interp>, other: @mut Env<Interp>
         env.vars.insert(*k, *v);
     }
 }
+
+pub fn augment<Interp>(env: @mut Env<Interp>) -> @mut Env<Interp> {
+    let mut out_env = @mut Env::new();
+    env.parent= @option::Some(env);
+    out_env
+}
+

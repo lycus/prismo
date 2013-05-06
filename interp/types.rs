@@ -29,6 +29,9 @@ pub enum Val<Interp> {
     // "hello!"
     String(@str),
 
+    // true/false
+    Boolean(bool),
+
     // [a, b, c, ...]
     List(@[@mut Val<Interp>]),
 
@@ -45,7 +48,7 @@ pub enum Val<Interp> {
     Module(@mut linear::LinearMap<ast::Sym, @mut Val<Interp>>),
 
     // <routine>
-    Routine(@fn (&Interp, &env::Env<Interp>) -> Val<Interp>),
+    Routine(@fn (@mut Interp, @mut env::Env<Interp>) -> @mut Val<Interp>),
 
     // <handle>
     Handle(c_void),
