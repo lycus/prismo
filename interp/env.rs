@@ -14,7 +14,7 @@ impl to_bytes::IterBytes for ast::Sym {
 
 pub struct Env<Interp> {
     parent: @option::Option<@mut Env<Interp>>,
-    vars: @mut linear::LinearMap<ast::Sym, @types::Val<Interp>>
+    vars: @mut linear::LinearMap<ast::Sym, @mut types::Val<Interp>>
 }
 
 pub impl <Interp> Env<Interp> {
@@ -26,7 +26,7 @@ pub impl <Interp> Env<Interp> {
     }
 }
 
-pub fn declare<Interp>(env: @mut Env<Interp>, sym: &ast::Sym, val: @types::Val<Interp>) -> bool {
+pub fn declare<Interp>(env: @mut Env<Interp>, sym: &ast::Sym, val: @mut types::Val<Interp>) -> bool {
     env.vars.insert(*sym, val)
 }
 

@@ -40,7 +40,7 @@ pub struct Interp {
     root: @mut env::Env<Interp>,
     argv: @[@str],
     filename: @str,
-    current_frame: @option::Option<@mut Frame>
+    current_frame: @mut option::Option<@mut Frame>
 }
 
 pub impl Interp {
@@ -51,17 +51,31 @@ pub impl Interp {
             root: @mut env::Env::new(),
             argv: argv,
             filename: filename,
-            current_frame: @option::None
+            current_frame: @mut option::None
         }
     }
 }
 
+fn wind(interp: @mut Interp, env: @mut env::Env<Interp>, lineno: uint) -> @mut Frame {
+    // allocate a new frame
+    let frame = @mut Frame::new(interp, env, interp.filename, lineno);
+    interp.current_frame = @mut option::Some(frame);
+    frame
+}
+
+fn unwind(interp: @mut Interp) -> () {
+    interp.current_frame = match *interp.current_frame {
+        option::None => @mut option::None,
+        option::Some(frame) => frame.parent
+    };
+}
+
 pub struct Frame {
-    parent: @option::Option<@mut Frame>,
+    parent: @mut option::Option<@mut Frame>,
     env: @mut env::Env<Interp>,
     file: @str,
     lineno: uint,
-    exception: @option::Option<types::Val<Interp>>
+    exception: @mut option::Option<@mut types::Val<Interp>>
 }
 
 pub impl Frame {
@@ -71,7 +85,7 @@ pub impl Frame {
             env: env,
             file: file,
             lineno: lineno,
-            exception: @option::None
+            exception: @mut option::None
         }
     }
 }
@@ -107,7 +121,7 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
             if qualified {
                 // qualified imports symbols from child interpreter into a module
                 env::declare(interp.root, &ast::Sym(module_name.to_managed()),
-                             @types::Module(interp1.root.vars));
+                             @mut types::Module(interp1.root.vars));
             } else {
                 // otherwise we just plop all the symbols in
                 for interp1.root.vars.each_key |k| {
@@ -125,19 +139,82 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     };
 }
 
-fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @types::Val<Interp>) -> () {
+fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
+    // perform pattern matching of basic patterns -- if a match fails, we leave all the symbols in
+    // scope and not care, because we unwind the stack during an exception and we won't be able to
+    // get the environment back.
     match *pat {
-        ast::AnyPattern => (),
-        ast::SymbolPattern(sym) => { env::declare(env, &sym, val); },
-        _ => fail!(~":V")
-    };
+        ast::AnyPattern => true,
+        ast::ManyPattern => false,
+        ast::UnitPattern => match *val {
+            types::Unit => true,
+            _ => false
+        },
+        ast::LiteralPattern(lit) => *val == gen_lit(lit),
+        ast::SymbolPattern(sym) => {
+            env::declare(env, &sym, val);
+            true
+        },
+        ast::BoundPattern(sym, pat) => {
+            let r = unify_pattern_basic(interp, env, pat, val);
+            env::declare(env, &sym, val);
+            r
+        },
+        ast::DisjunctivePattern(pat1, pat2) => {
+            unify_pattern_basic(interp, env, pat1, val) || unify_pattern_basic(interp, env, pat2, val)
+        },
+        ast::ConjunctivePattern(pat1, pat2) => {
+            unify_pattern_basic(interp, env, pat1, val) && unify_pattern_basic(interp, env, pat2, val)
+        },
+        ast::RecordPattern(pat_decl, pats) => fail!(~":V"),
+        ast::ListPattern(pats) => {
+            match *val {
+                types::List(vals) => {
+                    if vals.len() < pats.len() {
+                        false
+                    } else {
+                        match pats[pats.len() - 1] {
+                            ast::ManyPattern => {
+                                // pattern match with a spread argument
+                                let mut ok = true;
+                                let mut i = 0;
+                                while i < pats.len() - 1 {
+                                    ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
+                                    if !ok { break; };
+                                    i += 1;
+                                }
+                                ok
+                            },
+                            _ => {
+                                if vals.len() > pats.len() {
+                                    // no spread argument, :(
+                                    false
+                                } else {
+                                    // pattern match with a full pattern list
+                                    let mut ok = true;
+                                    let mut i = 0;
+                                    while i < pats.len() {
+                                        ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
+                                        if !ok { break; };
+                                        i += 1;
+                                    }
+                                    ok
+                                }
+                            }
+                        }
+                    }
+                },
+                _ => false
+            }
+        }
+    }
 }
 
-fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::LetPat, val: @types::Val<Interp>) -> () {
+fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::LetPat, val: @mut types::Val<Interp>) -> bool {
     match *pat {
         ast::BasicPattern(pat) => unify_pattern_basic(interp, env, &pat, val),
         _ => fail!(~":V")
-    };
+    }
 }
 
 fn unescape_str(inp: &str) -> ~str {
@@ -148,30 +225,43 @@ fn unescape_str(inp: &str) -> ~str {
     while slice.len() > 0 {
         out += ~[if slice.char_at(0) == '\\' {
             match slice.char_at(1) {
+                // \" -> "
                 '"' => {
                     i += 1;
                     '"'
                 },
+
+                // \' -> '
                 '\'' => {
                     i += 1;
                     '\''
                 },
+
+                // \\ -> \
                 '\\' => {
                     i += 1;
                     '\\'
                 },
+
+                // \n -> <LF>
                 'n' => {
                     i += 1;
                     '\n'
                 },
+
+                // \r -> <CR>
                 'r' => {
                     i += 1;
                     '\r'
                 },
+
+                // \t -> <TAB>
                 't' => {
                     i += 1;
                     '\t'
                 },
+
+                // \x## -> hex escape
                 'x' => {
                     if slice.len() >= 4 {
                         i += 3;
@@ -180,6 +270,8 @@ fn unescape_str(inp: &str) -> ~str {
                         'x'
                     }
                 },
+
+                // \u#### -> unicode escape
                 'u' => {
                     if slice.len() >= 6 {
                         i += 5;
@@ -188,6 +280,8 @@ fn unescape_str(inp: &str) -> ~str {
                         'u'
                     }
                 },
+
+                // otherwise -> \
                 _ => '\\'
             }
         } else {
@@ -201,49 +295,42 @@ fn unescape_str(inp: &str) -> ~str {
     str::from_chars(out)
 }
 
-fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> types::Val<Interp> {
-    // allocate a new frame
-    let frame = @mut Frame::new(interp, env, interp.filename, exp.lineno);
-    interp.current_frame = @option::Some(frame);
+fn gen_lit(l: ast::Lit) -> types::Val<Interp> {
+    match l {
+        ast::IntegerLiteral(i) => types::Integer(int::from_str(i).unwrap()),
+        ast::FloatingLiteral(i) => types::Floating(float::from_str(i).unwrap()),
+        ast::StringLiteral(s) => types::String(unescape_str(s).to_managed()),
+        ast::BytesLiteral(s) => types::Bytes(at_vec::from_owned(unescape_str(s).to_bytes()))
+    }
+}
 
+fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> types::Val<Interp> {
     let r = match exp.exp {
         ast::UnitExpression => types::Unit,
-        ast::LiteralExpression(l) => {
-            match l {
-                ast::IntegerLiteral(i) => types::Integer(int::from_str(i).unwrap()),
-                ast::FloatingLiteral(i) => types::Floating(float::from_str(i).unwrap()),
-                ast::StringLiteral(s) => types::String(unescape_str(s).to_managed()),
-                ast::BytesLiteral(s) => types::Bytes(at_vec::from_owned(unescape_str(s).to_bytes()))
-            }
-        },
+        ast::LiteralExpression(l) => gen_lit(l),
         ast::LambdaExpression(pat, exp) => types::Function(@[types::Fun {
             pattern: pat,
             body: exp,
             env: env
         }]),
+        ast::ListExpression(exps) => types::List(at_vec::map(exps, |exp| @mut eval_exp(interp, env, exp))),
         _ => fail!(~":V")
-    };
-
-    interp.current_frame = match *interp.current_frame {
-        option::None => @option::None,
-        option::Some(frame) => frame.parent
     };
 
     r
 }
 
 fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) -> () {
-    // allocate a new frame
-    let frame = @mut Frame::new(interp, env, interp.filename, stmt.lineno);
-    interp.current_frame = @option::Some(frame);
+    let frame = interp.current_frame.unwrap();
 
     match stmt.stmt {
-        ast::LetBindingStatement(pat, exp) => unify_pattern_let(interp, env, &pat, @eval_exp(interp, env, &exp)),
+        ast::LetBindingStatement(pat, exp) => {
+            if !unify_pattern_let(interp, env, &pat, @mut eval_exp(interp, env, &exp)) {
+                // uh oh, we need to throw an exception and unwind
+                frame.exception = @mut option::Some(@mut types::String(@"pattern match failed"));
+            }
+        },
         ast::ExpressionStatement(exp) => { eval_exp(interp, env, &exp); }
-    };
-    interp.current_frame = match *interp.current_frame {
-        option::None => @option::None,
-        option::Some(frame) => frame.parent
     };
 }
 
@@ -268,6 +355,15 @@ pub fn run(interp: @mut Interp, prog: ast::Program) -> () {
     }
 
     for prog.body.each |stmt| {
+        let mut frame = wind(interp, interp.root, stmt.lineno);
+
         exec_stmt(interp, interp.root, stmt);
+
+        match *frame.exception {
+            option::None => unwind(interp),
+            option::Some(f) => {
+                fail!(fmt!("%? in %s:%u", f, frame.file, frame.lineno))
+            }
+        }
     }
 }
