@@ -7,7 +7,7 @@ use interp::types;
 impl to_bytes::IterBytes for ast::Sym {
     fn iter_bytes(&self, lsb0: bool, f: to_bytes::Cb) {
         match self {
-            &ast::Sym(r, s) => (r, s).iter_bytes(lsb0, f)
+            &ast::Sym(s) => s.iter_bytes(lsb0, f)
         }
     }
 }

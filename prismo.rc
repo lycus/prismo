@@ -121,7 +121,7 @@ fn main() {
     if getopts::opt_present(&matches, "e") || getopts::opt_present(&matches, "env") {
         io::println("ENV");
         for interp.root.vars.mutate_values |k, v| {
-            io::println(fmt!("%s: %s", k.to_str(), interp::types::repr(*v)));
+            io::println(fmt!("%s: %s", **k, interp::types::repr(*v)));
         }
         io::println("END OF ENV");
     }

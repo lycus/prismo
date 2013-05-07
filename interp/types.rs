@@ -42,6 +42,9 @@ pub enum Val<Interp> {
     // f(a, b, ...) = ...
     Function(@[Fun<Interp>]),
 
+    // a.{...}
+    Module(@mut linear::LinearMap<ast::Sym, @mut Val<Interp>>),
+
     // <routine>
     Routine(@fn (@mut Interp, @mut env::Env<Interp>) -> @mut Val<Interp>),
 
@@ -61,6 +64,7 @@ pub fn repr<Interp>(v: @mut Val<Interp>) -> ~str {
         @Record(decl, vs)   => fmt!("%s(%s)", decl.name.to_str(), str::connect(vs.map(|x| repr(*x)), ", ")),
         @Constructor(decl)  => fmt!("<constructor for %s>", decl.name.to_str()),
         @Function(_)        => ~"<function>",
+        @Module(_)          => ~"<module>",
         @Routine(_)         => ~"<routine>",
         @Handle(_)          => fmt!("<handle>")
     }

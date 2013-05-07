@@ -1,34 +1,25 @@
 #[deriving(Eq)]
-pub struct Sym(@QualifiedName, @str);
-
-impl to_str::ToStr for Sym {
-    fn to_str(&self) -> ~str {
-        match *self {
-            Sym(@QualifiedName([]), sym) => sym.to_str(),
-            Sym(dn, sym) => fmt!("%s.%s", dn.to_str(), sym.to_str())
-        }
-    }
-}
+pub struct Sym(@str);
 
 #[deriving(Eq)]
-pub struct RecordName(@QualifiedName, @str);
+pub struct RecordName(@DottedName, @str);
 
 impl to_str::ToStr for RecordName {
     fn to_str(&self) -> ~str {
         match *self {
-            RecordName(@QualifiedName([]), sym) => sym.to_str(),
+            RecordName(@DottedName([]), sym) => sym.to_str(),
             RecordName(dn, sym) => fmt!("%s.%s", dn.to_str(), sym.to_str())
         }
     }
 }
 
 #[deriving(Eq)]
-pub struct QualifiedName(@[@str]);
+pub struct DottedName(@[Sym]);
 
-impl to_str::ToStr for QualifiedName {
+impl to_str::ToStr for DottedName {
     fn to_str(&self) -> ~str {
         match *self {
-            QualifiedName(syms) => str::connect(syms.map(|sym| sym.to_str()), ~".")
+            DottedName(syms) => str::connect(syms.map(|sym| sym.to_str()), ~".")
         }
     }
 }
@@ -43,10 +34,10 @@ pub enum Lit {
 
 pub enum LetPat {
     // a(b, c, ...)
-    FunctionPattern(QualifiedName, @[Pat]),
+    FunctionPattern(DottedName, @[Pat]),
 
     // a.b.c
-    QualifiedPattern(QualifiedName),
+    DottedPattern(DottedName),
 
     // ...
     BasicPattern(Pat)
@@ -171,7 +162,7 @@ pub fn mk_expression_statement(exp: Exp) -> Stmt {
 }
 
 pub struct ImportDeclaration {
-    module: QualifiedName,
+    module: DottedName,
     qualified: bool,
     lineno: uint
 }
