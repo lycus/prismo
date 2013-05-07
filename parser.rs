@@ -508,6 +508,28 @@ fn parse_block(state: @mut ParserState) -> ast::Exp {
     }
 }
 
+fn parse_fn_statement(state: @mut ParserState) -> ast::Stmt {
+    let token = state.expect(lexer::LET);
+    state.expect(lexer::FN);
+    let dn = parse_dotted_name(state);
+
+    state.expect(lexer::LPAREN);
+    let patterns = if state.peek().type_ != lexer::RPAREN {
+        parse_patterns(state)
+    } else {
+        @[]
+    };
+    state.expect(lexer::RPAREN);
+
+    state.expect(lexer::ASSIGN);
+
+    ast::Stmt {
+        // TODO: correct fn binding
+        stmt: ast::FnBindingStatement(dn, ast::Sym(@""), patterns, parse_expression(state)),
+        lineno: token.lineno
+    }
+}
+
 fn parse_let_statement(state: @mut ParserState) -> ast::Stmt {
     let token = state.expect(lexer::LET);
     let pat = parse_pattern(state);
@@ -516,13 +538,6 @@ fn parse_let_statement(state: @mut ParserState) -> ast::Stmt {
     ast::Stmt {
         stmt: ast::LetBindingStatement(pat, parse_expression(state)),
         lineno: token.lineno
-    }
-}
-
-fn parse_binding_statement(state: @mut ParserState) -> ast::Stmt {
-    match state.peek().type_ {
-        lexer::LET          => parse_let_statement(state),
-        _                   => state.fail(~"unreachable code reached?!")
     }
 }
 
@@ -742,7 +757,14 @@ fn parse_expression(state: @mut ParserState) -> ast::Exp {
 
 fn parse_statement(state: @mut ParserState) -> ast::Stmt {
     match state.peek().type_ {
-        lexer::LET          => parse_let_statement(state),
+        lexer::LET          => {
+            // XXX: LL(2)
+            if state.peek_by(1).type_ == lexer::FN {
+                parse_fn_statement(state)
+            } else {
+                parse_let_statement(state)
+            }
+        },
         _                   => ast::mk_expression_statement(parse_expression(state))
     }
 }

@@ -539,6 +539,7 @@ fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) 
                 frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
             }
         },
+        ast::FnBindingStatement(dn, name, pat, exp) => fail!(~"fn binding not implemented"),
         ast::ExpressionStatement(exp) => { eval_exp(interp, env, &exp); }
     };
 }

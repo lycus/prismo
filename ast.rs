@@ -139,6 +139,9 @@ pub enum BareStmt {
     // let a = b
     LetBindingStatement(Pat, Exp),
 
+    // fn f(a) = b
+    FnBindingStatement(DottedName, Sym, @[Pat], Exp),
+
     // ...
     ExpressionStatement(Exp)
 }
