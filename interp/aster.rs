@@ -158,7 +158,7 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     };
 }
 
-fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
+fn unify_pat(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
     if match *pat {
         ast::AnyPattern => true,
         ast::ManyPattern => false,
@@ -172,15 +172,15 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
             true
         },
         ast::BoundPattern(sym, pat) => {
-            let r = unify_pattern_basic(interp, env, pat, val);
+            let r = unify_pat(interp, env, pat, val);
             env::declare(env, &sym, val);
             r
         },
         ast::DisjunctivePattern(pat1, pat2) => {
-            unify_pattern_basic(interp, env, pat1, val) || unify_pattern_basic(interp, env, pat2, val)
+            unify_pat(interp, env, pat1, val) || unify_pat(interp, env, pat2, val)
         },
         ast::ConjunctivePattern(pat1, pat2) => {
-            unify_pattern_basic(interp, env, pat1, val) && unify_pattern_basic(interp, env, pat2, val)
+            unify_pat(interp, env, pat1, val) && unify_pat(interp, env, pat2, val)
         },
         ast::RecordPattern(name, pats) => match *val {
             types::Record(_, vals) => {
@@ -198,7 +198,7 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
                             let mut ok = true;
                             let mut i = 0;
                             while i < pats.len() {
-                                ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
+                                ok = unify_pat(interp, env, &pats[i], vals[i]);
                                 if !ok { break; };
                                 i += 1;
                             }
@@ -222,7 +222,7 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
                             let mut ok = true;
                             let mut i = 0;
                             while i < pats.len() - 1 {
-                                ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
+                                ok = unify_pat(interp, env, &pats[i], vals[i]);
                                 if !ok { break; };
                                 i += 1;
                             }
@@ -237,7 +237,7 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
                                 let mut ok = true;
                                 let mut i = 0;
                                 while i < pats.len() {
-                                    ok = unify_pattern_basic(interp, env, &pats[i], vals[i]);
+                                    ok = unify_pat(interp, env, &pats[i], vals[i]);
                                     if !ok { break; };
                                     i += 1;
                                 }
@@ -256,22 +256,6 @@ fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &as
     }
 }
 
-fn unify_pattern_let(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::LetPat, val: @mut types::Val<Interp>) -> () {
-    let frame = interp.current_frame.unwrap();
-
-    match *pat {
-        ast::BasicPattern(pat) => {
-            let in_env = @mut env::Env::new();
-            if unify_pattern_basic(interp, in_env, &pat, val) {
-                env::merge_into_shallow(env, in_env);
-            } else {
-                frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
-            }
-        },
-        _ => fail!(~"not implemented: full let-pattern unify")
-    }
-}
-
 fn apply_exp(interp: @mut Interp, env: @mut env::Env<Interp>, f: @[types::Fun<Interp>], args: @[@mut types::Val<Interp>]) -> @mut types::Val<Interp> {
     let frame = interp.current_frame.unwrap();
 
@@ -281,7 +265,7 @@ fn apply_exp(interp: @mut Interp, env: @mut env::Env<Interp>, f: @[types::Fun<In
     for funs.each |fun| {
         let pat = ast::ListPattern(fun.pattern);
         let child_env = @mut env::Env::new();
-        if unify_pattern_basic(interp, child_env, &pat, vals) {
+        if unify_pat(interp, child_env, &pat, vals) {
             // wind a new frame
             let mut frame = wind(interp, env, fun.filename, fun.body.lineno);
 
@@ -461,7 +445,7 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
             for cases.each |&(pat, body)| {
                 let in_env = @mut env::Env::new();
 
-                if unify_pattern_basic(interp, in_env, &pat, v) {
+                if unify_pat(interp, in_env, &pat, v) {
                     env::merge_into_shallow(env, in_env);
                     r = eval_exp(interp, env, &body);
                     break;
@@ -537,8 +521,24 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
 }
 
 fn exec_stmt(interp: @mut Interp, env: @mut env::Env<Interp>, stmt: &ast::Stmt) -> () {
+    let frame = interp.current_frame.unwrap();
+
     match stmt.stmt {
-        ast::LetBindingStatement(pat, exp) => unify_pattern_let(interp, env, &pat, eval_exp(interp, env, &exp)),
+        ast::LetBindingStatement(pat, exp) => {
+            let val = eval_exp(interp, env, &exp);
+
+            if frame.exception.is_some() {
+                return;
+            }
+
+            let in_env = @mut env::Env::new();
+
+            if unify_pat(interp, in_env, &pat, val) {
+                env::merge_into_shallow(env, in_env);
+            } else {
+                frame.exception = @mut option::Some(@mut types::String(@"pattern match refuted"));
+            }
+        },
         ast::ExpressionStatement(exp) => { eval_exp(interp, env, &exp); }
     };
 }

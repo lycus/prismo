@@ -223,26 +223,6 @@ fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
     ast::RecordPattern(name, patterns)
 }
 
-fn parse_function_pattern(state: @mut ParserState) -> ast::LetPat {
-    let lhs = parse_dotted_name(state);
-
-    if state.peek().type_ != lexer::LPAREN {
-        return ast::DottedPattern(lhs)
-    }
-
-    state.advance();
-
-    let patterns = if state.peek().type_ != lexer::RPAREN {
-        parse_patterns(state)
-    } else {
-        @[]
-    };
-
-    state.expect(lexer::RPAREN);
-
-    ast::FunctionPattern(lhs, patterns)
-}
-
 fn parse_list_pattern(state: @mut ParserState) -> ast::Pat {
     state.expect(lexer::LBRACK);
 
@@ -377,16 +357,6 @@ fn parse_bound_pattern(state: @mut ParserState) -> ast::Pat {
 
 fn parse_pattern(state: @mut ParserState) -> ast::Pat {
     parse_bound_pattern(state)
-}
-
-fn parse_lettable_pattern(state: @mut ParserState) -> ast::LetPat {
-    // XXX: LL(2)
-    if state.peek().type_ == lexer::SYMBOL && (state.peek_by(1).type_ == lexer::LPAREN ||
-                                               state.peek_by(1).type_ == lexer::DOT) {
-        parse_function_pattern(state)
-    } else {
-        ast::BasicPattern(parse_pattern(state))
-    }
 }
 
 fn parse_patterns(state: @mut ParserState) -> @[ast::Pat] {
@@ -540,7 +510,7 @@ fn parse_block(state: @mut ParserState) -> ast::Exp {
 
 fn parse_let_statement(state: @mut ParserState) -> ast::Stmt {
     let token = state.expect(lexer::LET);
-    let pat = parse_lettable_pattern(state);
+    let pat = parse_pattern(state);
     state.expect(lexer::ASSIGN);
 
     ast::Stmt {

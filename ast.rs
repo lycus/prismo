@@ -32,17 +32,6 @@ pub enum Lit {
     BytesLiteral(@str)
 }
 
-pub enum LetPat {
-    // a(b, c, ...)
-    FunctionPattern(DottedName, @[Pat]),
-
-    // a.b.c
-    DottedPattern(DottedName),
-
-    // ...
-    BasicPattern(Pat)
-}
-
 pub enum Pat {
     // _
     AnyPattern,
@@ -148,7 +137,7 @@ pub struct Stmt {
 
 pub enum BareStmt {
     // let a = b
-    LetBindingStatement(LetPat, Exp),
+    LetBindingStatement(Pat, Exp),
 
     // ...
     ExpressionStatement(Exp)
