@@ -521,7 +521,7 @@ fn parse_fn_statement(state: @mut ParserState) -> ast::Stmt {
     };
     state.expect(lexer::RPAREN);
 
-    state.expect(lexer::ASSIGN);
+    state.expect(lexer::ARROW);
 
     ast::Stmt {
         // TODO: correct fn binding
