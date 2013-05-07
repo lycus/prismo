@@ -24,6 +24,7 @@ pub enum TokenType {
     SEMICOLON,
     COMMA,
     COLON,
+    QUALIFY,
     DOT,
     ARROW,
     LPAREN,
@@ -203,6 +204,7 @@ fn lex_operator(s: &str) -> (option::Option<(TokenType, @str)>, uint) {
 
     (option::Some((match s.slice(0, n) {
         "..." => ELLIPSIS,
+        "::" => QUALIFY,
         "->" => ARROW,
         "=" => ASSIGN,
         "." => DOT,

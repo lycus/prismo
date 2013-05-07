@@ -49,7 +49,8 @@ impl ParserState {
 
 fn parse_symbol(state: @mut ParserState) -> (ast::Sym, uint) {
     let token = state.expect(lexer::SYMBOL);
-    (ast::Sym(token.value), token.lineno)
+    // TODO: parse qualified names
+    (ast::Sym(@ast::QualifiedName(@[]), token.value), token.lineno)
 }
 
 fn parse_symbol_or_record_name(state: @mut ParserState) -> (ast::Sym, uint) {
@@ -60,7 +61,8 @@ fn parse_symbol_or_record_name(state: @mut ParserState) -> (ast::Sym, uint) {
 
         lexer::RECORD_NAME => {
             let token = state.advance();
-            (ast::Sym(token.value), token.lineno)
+            // TODO: parse qualified names
+            (ast::Sym(@ast::QualifiedName(@[]), token.value), token.lineno)
         }
 
         _ => {
@@ -100,19 +102,19 @@ fn parse_literal(state: @mut ParserState) -> ast::Exp {
 }
 
 fn parse_qualified_name(state: @mut ParserState) -> ast::QualifiedName {
-    let (part, _) = parse_symbol(state);
-    let mut parts = @[part];
+    let mut token = state.expect(lexer::SYMBOL);
+    let mut parts = @[token.value];
 
     loop {
-        let token = state.peek();
+        token = state.peek();
 
-        if (token.type_ != lexer::DOT) {
+        if (token.type_ != lexer::QUALIFY) {
             break;
         }
         state.advance();
 
-        let (part, _) = parse_symbol(state);
-        parts += [part];
+        token = state.expect(lexer::SYMBOL);
+        parts += [token.value];
     }
 
     ast::QualifiedName(parts)

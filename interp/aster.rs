@@ -97,7 +97,7 @@ pub impl Frame {
 }
 
 pub fn import_module(interp: @mut Interp, name: &ast::QualifiedName, qualified: bool) -> () {
-    let module_parts = (**name).to_owned().map(|x| (*x).to_owned());
+    let module_parts = (**name).to_owned().map(|x| x.to_owned());
     let mut parts = copy module_parts;
 
     vec::reverse(parts);
@@ -144,17 +144,15 @@ pub fn import_module(interp: @mut Interp, name: &ast::QualifiedName, qualified: 
     };
 
     if qualified {
-        let module_name = ast::Sym(module_name.to_managed());
-
         // qualified imports symbols from child interpreter into a module
-        env::declare(interp.root, &module_name,
-                     @mut types::Module(interp1.root.vars));
+        //env::declare(interp.root, &module_name,
+        //             @mut types::Module(interp1.root.vars));
 
-        for interp1.record_types.mutate_values |k, v| {
+        /*for interp1.record_types.mutate_values |k, v| {
             interp.record_types.insert(match *k {
                 @ast::RecordName(modu, name) => @ast::RecordName(@ast::QualifiedName(**modu + [module_name]), name)
             }, *v);
-        }
+        }*/
     } else {
         // otherwise we just plop all the symbols in
         for interp1.root.vars.mutate_values |k, v| {
@@ -347,7 +345,7 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
             match env::find(env, &sym) {
                 option::Some(x) => x,
                 option::None => {
-                    frame.exception = @mut option::Some(@mut types::String(fmt!("symbol `%s` not found in scope", *sym).to_managed()));
+                    frame.exception = @mut option::Some(@mut types::String(fmt!("symbol `%s` not found in scope", sym.to_str()).to_managed()));
                     @mut types::Unit
                 }
             }
@@ -359,24 +357,17 @@ fn eval_exp(interp: @mut Interp, env: @mut env::Env<Interp>, exp: &ast::Exp) -> 
                 return @mut types::Unit;
             }
             match *v {
-                types::Module(vars) => match vars.find(&sym) {
-                    option::Some(x) => *x,
-                    option::None => {
-                        frame.exception = @mut option::Some(@mut types::String(fmt!("symbol `%s` not found in module", *sym).to_managed()));
-                        @mut types::Unit
-                    }
-                },
                 types::Record(decl, vars) => {
                     match decl.slots.position_elem(&sym) {
                         option::Some(i) => vars[i],
                         option::None => {
-                            frame.exception = @mut option::Some(@mut types::String(fmt!("slot `%s` not found in record", *sym).to_managed()));
+                            frame.exception = @mut option::Some(@mut types::String(fmt!("slot `%s` not found in record", sym.to_str()).to_managed()));
                             @mut types::Unit
                         }
                     }
                 },
                 _ => {
-                    frame.exception = @mut option::Some(@mut types::String(fmt!("cannot acccess `%s` of non-record/module", *sym).to_managed()));
+                    frame.exception = @mut option::Some(@mut types::String(fmt!("cannot acccess `%s` of non-record/module", sym.to_str()).to_managed()));
                     @mut types::Unit
                 }
             }
@@ -575,7 +566,7 @@ pub fn run(interp: @mut Interp, filename: @str, prog: ast::Program) -> () {
         interp.record_types.insert(@rec.name, @*rec);
         let ast::RecordName(_, r) = rec.name;
 
-        env::declare(interp.root, &ast::Sym(r), @mut if rec.slots.len() == 0 {
+        env::declare(interp.root, &ast::Sym(@ast::QualifiedName(@[]), r), @mut if rec.slots.len() == 0 {
             types::Record(@*rec, @[])
         } else {
             types::Constructor(@*rec)

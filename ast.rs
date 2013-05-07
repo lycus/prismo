@@ -1,5 +1,14 @@
 #[deriving(Eq)]
-pub struct Sym(@str);
+pub struct Sym(@QualifiedName, @str);
+
+impl to_str::ToStr for Sym {
+    fn to_str(&self) -> ~str {
+        match *self {
+            Sym(@QualifiedName([]), sym) => sym.to_str(),
+            Sym(dn, sym) => fmt!("%s.%s", dn.to_str(), sym.to_str())
+        }
+    }
+}
 
 #[deriving(Eq)]
 pub struct RecordName(@QualifiedName, @str);
@@ -14,7 +23,7 @@ impl to_str::ToStr for RecordName {
 }
 
 #[deriving(Eq)]
-pub struct QualifiedName(@[Sym]);
+pub struct QualifiedName(@[@str]);
 
 impl to_str::ToStr for QualifiedName {
     fn to_str(&self) -> ~str {
