@@ -181,6 +181,32 @@ fn parse_record_declaration(state: @mut ParserState) -> ast::RecordDeclaration {
     }
 }
 
+fn parse_dotted_record_pattern(state: @mut ParserState) -> ast::Pat {
+    let (part, _) = parse_symbol(state);
+    let mut parts = @[part];
+
+    loop {
+        let mut token = state.peek();
+
+        if token.type_ != lexer::DOT {
+            break;
+        }
+        token = state.advance();
+
+        if state.peek().type_ == lexer::RECORD_NAME {
+            return match parse_record_pattern(state) {
+                ast::RecordPattern(ast::RecordName(_, sym), patterns) => ast::RecordPattern(ast::RecordName(@ast::DottedName(parts), sym), patterns),
+                _ => state.fail(~"irrefutable pattern match refuted?!")
+            };
+        }
+
+        let (part, _) = parse_symbol(state);
+        parts += [part];
+    }
+
+    state.fail(~"unreachable code reached?!")
+}
+
 fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
     let (name, _) = parse_record_name(state);
 
@@ -195,10 +221,6 @@ fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
     }
 
     ast::RecordPattern(name, patterns)
-}
-
-fn parse_dotted_pattern(state: @mut ParserState) -> ast::LetPat {
-    ast::DottedPattern(parse_dotted_name(state))
 }
 
 fn parse_function_pattern(state: @mut ParserState) -> ast::LetPat {
@@ -284,7 +306,14 @@ fn parse_primary_pattern(state: @mut ParserState) -> ast::Pat {
         lexer::BYTES_LITERAL    |
         lexer::INTEGER_LITERAL  |
         lexer::FLOATING_LITERAL => parse_literal_pattern(state),
-        lexer::SYMBOL           => parse_symbol_pattern(state),
+        lexer::SYMBOL           => {
+            // XXX: LL(2)
+            if state.peek_by(1).type_ == lexer::DOT {
+                parse_dotted_record_pattern(state)
+            } else {
+                parse_symbol_pattern(state)
+            }
+        },
         _                       => {
             state.expect_any(~[lexer::UNDERSCORE,
                                lexer::ELLIPSIS,
