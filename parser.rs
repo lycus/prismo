@@ -99,7 +99,7 @@ fn parse_literal(state: @mut ParserState) -> ast::Exp {
     }
 }
 
-fn parse_dotted_name(state: @mut ParserState) -> ast::DottedName {
+fn parse_qualified_name(state: @mut ParserState) -> ast::QualifiedName {
     let (part, _) = parse_symbol(state);
     let mut parts = @[part];
 
@@ -115,7 +115,7 @@ fn parse_dotted_name(state: @mut ParserState) -> ast::DottedName {
         parts += [part];
     }
 
-    ast::DottedName(parts)
+    ast::QualifiedName(parts)
 }
 
 fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
@@ -127,7 +127,7 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
     }
 
     ast::ImportDeclaration {
-        module: parse_dotted_name(state),
+        module: parse_qualified_name(state),
         qualified: qualified,
         lineno: first.lineno
     }
@@ -135,7 +135,7 @@ fn parse_import_declaration(state: @mut ParserState) -> ast::ImportDeclaration {
 
 fn parse_record_name(state: @mut ParserState) -> (ast::RecordName, uint) {
     let token = state.expect(lexer::RECORD_NAME);
-    (ast::RecordName(@ast::DottedName(@[]), token.value), token.lineno)
+    (ast::RecordName(@ast::QualifiedName(@[]), token.value), token.lineno)
 }
 
 fn parse_record_body(state: @mut ParserState) -> @[ast::Sym] {
@@ -197,15 +197,11 @@ fn parse_record_pattern(state: @mut ParserState) -> ast::Pat {
     ast::RecordPattern(name, patterns)
 }
 
-fn parse_dotted_pattern(state: @mut ParserState) -> ast::LetPat {
-    ast::DottedPattern(parse_dotted_name(state))
-}
-
 fn parse_function_pattern(state: @mut ParserState) -> ast::LetPat {
-    let lhs = parse_dotted_name(state);
+    let lhs = parse_qualified_name(state);
 
     if state.peek().type_ != lexer::LPAREN {
-        return ast::DottedPattern(lhs)
+        return ast::QualifiedPattern(lhs)
     }
 
     state.advance();

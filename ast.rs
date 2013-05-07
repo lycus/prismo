@@ -2,24 +2,24 @@
 pub struct Sym(@str);
 
 #[deriving(Eq)]
-pub struct RecordName(@DottedName, @str);
+pub struct RecordName(@QualifiedName, @str);
 
 impl to_str::ToStr for RecordName {
     fn to_str(&self) -> ~str {
         match *self {
-            RecordName(@DottedName([]), sym) => sym.to_str(),
+            RecordName(@QualifiedName([]), sym) => sym.to_str(),
             RecordName(dn, sym) => fmt!("%s.%s", dn.to_str(), sym.to_str())
         }
     }
 }
 
 #[deriving(Eq)]
-pub struct DottedName(@[Sym]);
+pub struct QualifiedName(@[Sym]);
 
-impl to_str::ToStr for DottedName {
+impl to_str::ToStr for QualifiedName {
     fn to_str(&self) -> ~str {
         match *self {
-            DottedName(syms) => str::connect(syms.map(|sym| sym.to_str()), ~".")
+            QualifiedName(syms) => str::connect(syms.map(|sym| sym.to_str()), ~".")
         }
     }
 }
@@ -34,10 +34,10 @@ pub enum Lit {
 
 pub enum LetPat {
     // a(b, c, ...)
-    FunctionPattern(DottedName, @[Pat]),
+    FunctionPattern(QualifiedName, @[Pat]),
 
     // a.b.c
-    DottedPattern(DottedName),
+    QualifiedPattern(QualifiedName),
 
     // ...
     BasicPattern(Pat)
@@ -162,7 +162,7 @@ pub fn mk_expression_statement(exp: Exp) -> Stmt {
 }
 
 pub struct ImportDeclaration {
-    module: DottedName,
+    module: QualifiedName,
     qualified: bool,
     lineno: uint
 }

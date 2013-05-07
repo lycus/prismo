@@ -28,10 +28,10 @@ impl to_bytes::IterBytes for ast::RecordName {
 }
 
 
-impl to_bytes::IterBytes for ast::DottedName {
+impl to_bytes::IterBytes for ast::QualifiedName {
     fn iter_bytes(&self, lsb0: bool, f: to_bytes::Cb) {
         match self {
-            &ast::DottedName(s) => s.iter_bytes(lsb0, f)
+            &ast::QualifiedName(s) => s.iter_bytes(lsb0, f)
         }
     }
 }
@@ -42,7 +42,7 @@ pub struct Interp {
     root: @mut env::Env<Interp>,
     argv: @[@str],
     filename: @str,
-    loaded_files: @[Path], // TODO: implement me!
+    loaded_modules: @mut linear::LinearMap<ast::QualifiedName, @mut Interp>, // TODO: implement me!
     operators: @mut linear::LinearMap<@str, @[types::Fun<Interp>]>,
     current_frame: @mut option::Option<@mut Frame>
 }
@@ -55,7 +55,7 @@ pub impl Interp {
             root: @mut env::Env::new(),
             argv: argv,
             filename: @"?",
-            loaded_files: @[],
+            loaded_modules: @mut linear::LinearMap::new(),
             operators: @mut linear::LinearMap::new(),
             current_frame: @mut option::None
         }
@@ -96,7 +96,7 @@ pub impl Frame {
     }
 }
 
-pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: bool) -> () {
+pub fn import_module(interp: @mut Interp, name: &ast::QualifiedName, qualified: bool) -> () {
     let module_parts = (**name).to_owned().map(|x| (*x).to_owned());
     let mut parts = copy module_parts;
 
@@ -106,56 +106,66 @@ pub fn import_module(interp: @mut Interp, name: &ast::DottedName, qualified: boo
     parts = vec::tail(parts).to_owned();
     vec::reverse(parts);
 
-    let mut found = false;
-    let mut paths = interp.import_paths.to_owned();
+    let interp1 = match interp.loaded_modules.find(name) {
+        option::Some(i) => *i,
 
-    for paths.each_mut |import_path| {
-        // make a path inside the import path and check if that exists
-        let base_path = (copy *import_path).push_many(parts);
-        let path = base_path.push(filename);
+        option::None => {
+            let mut found = false;
+            let mut paths = interp.import_paths.to_owned();
 
-        if os::path_exists(&path) {
-            // make a copy of the import paths then give them to a new sub-interpreter
-            let mut import_paths1 = interp.import_paths.to_owned();
-            import_paths1.unshift(base_path);
+            let mut maybe_interp1 = option::None;
 
-            let interp1 = @mut Interp::new(at_vec::from_owned(import_paths1), interp.argv);
+            for paths.each_mut |import_path| {
+                // make a path inside the import path and check if that exists
+                let base_path = (copy *import_path).push_many(parts);
+                let path = base_path.push(filename);
 
-            // run the file in the sub-interpreter
-            run_file(interp1, &path);
+                if os::path_exists(&path) {
+                    // make a copy of the import paths then give them to a new sub-interpreter
+                    let mut import_paths1 = interp.import_paths.to_owned();
+                    import_paths1.unshift(base_path);
 
-            if qualified {
-                let module_name = ast::Sym(module_name.to_managed());
+                    let interp1 = @mut Interp::new(at_vec::from_owned(import_paths1), interp.argv);
 
-                // qualified imports symbols from child interpreter into a module
-                env::declare(interp.root, &module_name,
-                             @mut types::Module(interp1.root.vars));
-
-                for interp1.record_types.mutate_values |k, v| {
-                    interp.record_types.insert(match *k {
-                        @ast::RecordName(modu, name) => @ast::RecordName(@ast::DottedName(**modu + [module_name]), name)
-                    }, *v);
+                    // run the file in the sub-interpreter
+                    run_file(interp1, &path);
+                    maybe_interp1 = option::Some(interp1);
+                    interp.loaded_modules.insert(*name, interp1);
                 }
-            } else {
-                // otherwise we just plop all the symbols in
-                for interp1.root.vars.mutate_values |k, v| {
-                    env::declare(interp.root, k, *v);
-                }
+            };
 
-                // import record types
-                for interp1.record_types.mutate_values |k, v| {
-                    interp.record_types.insert(*k, *v);
-                }
+
+            if maybe_interp1.is_none() {
+                fail!(fmt!("couldn't import module %s", str::connect(module_parts, ".")))
             }
 
-            found = true;
-            break;
+            maybe_interp1.unwrap()
         }
     };
 
-    if !found {
-        fail!(fmt!("couldn't import module %s", str::connect(module_parts, ".")))
-    };
+    if qualified {
+        let module_name = ast::Sym(module_name.to_managed());
+
+        // qualified imports symbols from child interpreter into a module
+        env::declare(interp.root, &module_name,
+                     @mut types::Module(interp1.root.vars));
+
+        for interp1.record_types.mutate_values |k, v| {
+            interp.record_types.insert(match *k {
+                @ast::RecordName(modu, name) => @ast::RecordName(@ast::QualifiedName(**modu + [module_name]), name)
+            }, *v);
+        }
+    } else {
+        // otherwise we just plop all the symbols in
+        for interp1.root.vars.mutate_values |k, v| {
+            env::declare(interp.root, k, *v);
+        }
+
+        // import record types
+        for interp1.record_types.mutate_values |k, v| {
+            interp.record_types.insert(*k, *v);
+        }
+    }
 }
 
 fn unify_pattern_basic(interp: @mut Interp, env: @mut env::Env<Interp>, pat: &ast::Pat, val: @mut types::Val<Interp>) -> bool {
